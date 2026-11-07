@@ -1,0 +1,20 @@
+# Dependências e build
+node_modules/
+.vercel/
+
+# Segredos e configuração local
+.env
+.env.*
+!.env.example
+
+# Dados reais nunca entram no repositório
+*.real.json
+exports-originais/
+dados-clientes/
+
+# Sistema / editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
