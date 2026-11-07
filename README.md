@@ -99,4 +99,4 @@ Arquitetura de integração · automação de processos · APIs REST e OData · 
 ## Autor
 
 **Patrick Duarte** — Red Geek 3D Studio
-Projeto acadêmico (TCC). Repositório privado; o código e as regras de negócio pertencem ao autor. Veja [LICENSE](LICENSE).
+Projeto acadêmico (TCC), publicado para avaliação. O código e as regras de negócio pertencem ao autor. Veja [LICENSE](LICENSE).
