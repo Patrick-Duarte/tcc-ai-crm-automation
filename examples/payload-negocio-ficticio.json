@@ -1,0 +1,57 @@
+{
+  "Title": "RG-261107-024952 - Suporte de parede para controle remoto",
+  "ContactId": 123456,
+  "Amount": 323.14,
+  "PipelineId": 1000001,
+  "StageId": 1000002,
+  "OtherProperties": [
+    {
+      "FieldKey": "deal_00000000-0000-0000-0000-000000000003",
+      "IntegerValue": 2000004
+    },
+    {
+      "FieldKey": "deal_00000000-0000-0000-0000-000000000004",
+      "IntegerValue": 8
+    },
+    {
+      "FieldKey": "deal_00000000-0000-0000-0000-000000000005",
+      "DecimalValue": 367.2
+    },
+    {
+      "FieldKey": "deal_00000000-0000-0000-0000-000000000006",
+      "DecimalValue": 367.2
+    },
+    {
+      "FieldKey": "deal_00000000-0000-0000-0000-000000000007",
+      "DecimalValue": 44.06
+    },
+    {
+      "FieldKey": "deal_00000000-0000-0000-0000-000000000008",
+      "DateTimeValue": "2026-11-07T00:00:00"
+    },
+    {
+      "FieldKey": "deal_00000000-0000-0000-0000-000000000009",
+      "IntegerValue": 777001
+    },
+    {
+      "FieldKey": "deal_00000000-0000-0000-0000-000000000010",
+      "DateTimeValue": "2026-12-04T00:00:00"
+    },
+    {
+      "FieldKey": "deal_00000000-0000-0000-0000-000000000011",
+      "DecimalValue": 144.91
+    },
+    {
+      "FieldKey": "deal_00000000-0000-0000-0000-000000000012",
+      "DecimalValue": 178.23
+    },
+    {
+      "FieldKey": "deal_00000000-0000-0000-0000-000000000013",
+      "IntegerValue": 20
+    },
+    {
+      "FieldKey": "deal_00000000-0000-0000-0000-000000000001",
+      "BigStringValue": "PEDIDO: RG-261107-024952\nSTATUS: AGUARDANDO ORÇAMENTO\n\nDADOS DO CLIENTE\nTipo: Empresa\nEmpresa: Oficina Exemplo Ltda\nCNPJ: 11.222.333/0001-81\nResponsável: Fulano de Tal\nE-mail: contato@exemplo.com.br\nWhatsApp: 11900000000\n\nDADOS DO PEDIDO\nProduto: Suporte de parede para controle remoto\nQuantidade: 8\nCanal: WhatsApp\nData do pedido: 2026-11-07\nEntrega prevista: 2026-12-04\nArquivo: https://exemplo.com/modelo-suporte.3mf\nObservações: Cor preta, logotipo em relevo (dados fictícios)\n\nPRODUÇÃO\nPeso unitário: 60 g\nPeso total: 500 g\nImpressão por unidade: 2.5 h\nImpressão total: 20 h\nCusto hora-máquina: R$ 1,95\n\nCOMPOSIÇÃO FINANCEIRA\nFilamento por unidade: R$ 5,99\nMáquina por unidade: R$ 4,88\nReserva de falhas: R$ 1,09\nMão de obra: R$ 4,17\nEmbalagem: R$ 2,00\nCusto unitário: R$ 18,11\nPreço unitário: R$ 45,90\n\nTOTAIS\nVenda bruta: R$ 367,20\nTaxas: R$ 44,06\nValor líquido: R$ 323,14\nCusto de produção: R$ 144,91\nLucro estimado: R$ 178,23"
+    }
+  ]
+}
