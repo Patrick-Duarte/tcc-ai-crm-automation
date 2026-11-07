@@ -46,7 +46,7 @@ sequenceDiagram
 ## Estrutura do repositório
 
 ```text
-redgeek-ai-crm-automation/
+tcc-ai-crm-automation/
 ├── calculadora/            Web app de precificação (Vercel)
 │   ├── index.html          interface e cálculo em tempo real
 │   └── api/                função serverless: recálculo e ficha em PDF
