@@ -65,7 +65,7 @@ flowchart TD
 | On form submission | Form Trigger | Formulário público com um campo de arquivo `ficha_pdf` (.pdf) |
 | Extract from File | Extract from File | Extrai o texto do PDF |
 | Message a model | Google Gemini | Converte o texto em um JSON com 35 campos fixos ([contrato](integracao-gemini.md)) |
-| Validar Dados do Pedido | Code | Faz o parse do JSON, confere campos obrigatórios, quantidade, valor e a coerência preço × quantidade; define `statusValidacao` (`VALIDADO`/`REVISAR`), pipeline e etapa |
+| Validar Dados do Pedido | Code | Faz o parse do JSON, normaliza o tipo de cliente (Empresa/PJ, Pessoa Física/PF), resolve o nome do contato, confere os campos obrigatórios (`empresa` e `cnpj` só para Empresa), a quantidade e o valor; define `statusValidacao` (`VALIDADO`/`REVISAR`), pipeline e etapa |
 | Consultar Opções de Produtos | HTTP GET | `Fields@OptionsTables` com `$expand=Options` |
 | Verificar Produto | Code | Compara nomes normalizados (sem acentos, caixa ou espaços duplicados) |
 | Produto Existe? / Criar Opção de Produto / Produto Criado - ID | If / HTTP POST / Code | Reaproveita ou cria a opção e devolve `produtoOpcaoId` |
@@ -73,7 +73,7 @@ flowchart TD
 | Consultar Cliente Ploomes · If · Criar Empresa Ploomes | HTTP / If / HTTP | Busca a empresa e a cria quando não existe |
 | Consultar Contato Responsavel · Contato existe? · Criar Contato Responsavel | HTTP / If / HTTP | Busca o responsável por e-mail e o cria vinculado à empresa |
 | Criar negocio Ploomes | HTTP POST | Monta o negócio com `Amount` líquido, 12 campos personalizados e o texto "Solicitação da demanda"; aborta se o pedido não estiver `VALIDADO` |
-| Consultar pessoa fisica · If1 · Pessoa Existente - ID · Criar pessoa fisica · Criar Negocio Pessoa Fisica. | — | Ramo herdado da versão anterior (formulário), pendente de revisão |
+| Consultar pessoa fisica · If1 · Pessoa Existente - ID · Criar pessoa fisica · Criar Negocio Pessoa Fisica. | HTTP / If / Set / HTTP / HTTP | Busca a pessoa por e-mail (reaproveita ou cria) e cria o negócio com os mesmos 12 campos do ramo Empresa; aborta se o pedido não estiver `VALIDADO` ou se faltar algum valor financeiro |
 | Dados do Produto · Code in JavaScript · É empresa? · Dados da Empresa | Form / Code / If | **Legado**: formulários da versão 1, sem conexão de entrada |
 | Consultar Campos de Vendas · Consultar Opções de Canal | HTTP | **Utilitários** de descoberta de IDs, executados manualmente |
 

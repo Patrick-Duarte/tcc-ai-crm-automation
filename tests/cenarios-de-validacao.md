@@ -20,8 +20,8 @@ Legenda: ✅ executado com sucesso · ⏳ pendente · 🔧 depende de correção
 | W1.2 | Produto inexistente | Opção criada e ID usado no negócio | ⏳ teste isolado |
 | W1.3 | Empresa já cadastrada | Reutilizar a empresa | 🔧 A1, A2 |
 | W1.4 | Contato já cadastrado | Reutilizar o contato | 🔧 A2 |
-| W1.5 | Pessoa física | Contato e negócio criados | 🔧 A3 |
-| W1.6 | Ficha com total incoerente | `REVISAR`, nenhum registro criado | 🔧 A4 |
+| W1.5 | Pessoa física | Contato e negócio criados | ⏳ código da v2 validado com pedido fictício (status `VALIDADO`, corpo do negócio com 12 campos); falta execução no Ploomes |
+| W1.6 | Ficha com total incoerente | `REVISAR`, nenhum registro criado | 🔧 A4, A14 |
 | W1.7 | Mesma ficha enviada duas vezes | Segundo envio recusado | 🔧 A5 |
 | W1.8 | Persistência de cada campo personalizado | Todos os campos visíveis no negócio | ⏳ conferência campo a campo |
 

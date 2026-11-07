@@ -83,7 +83,7 @@ tcc-ai-crm-automation/
 | Busca e criação da opção de produto | Implementado; caminho "produto novo" pendente de teste isolado |
 | Cadastro de empresa e responsável **novos** + criação do negócio | Testado |
 | Empresa ou contato **já existentes** | Segunda fase (o fluxo hoje encerra nesse caso) |
-| Ramo de pessoa física | Pendente de revisão (ver [análise técnica](docs/analise-tecnica.md)) |
+| Ramo de pessoa física | Corrigido na v2; validado com dados fictícios, pendente de teste no Ploomes |
 | Análise de viabilidade com IA e gravação no Ploomes | Implementado e testado |
 | Bloqueio de reanálise sem alteração | Pendente de teste de repetição |
 | Inteligência comercial semanal (Sheets + dashboard por e-mail) | Implementado; integração com os novos campos de produção é evolução futura |

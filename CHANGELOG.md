@@ -2,6 +2,16 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
+## [1.1.0] — 2026-11-07
+
+### Workflow 1 — Cadastro de pedidos por PDF (v2)
+- Validação reescrita: normaliza o tipo de cliente e exige `empresa`/`cnpj` só para Empresa.
+- Ramo de pessoa física reconstruído sobre os dados validados, com os mesmos campos do ramo Empresa e validação financeira.
+- Modelo de extração atualizado para `gemini-3.5-flash-lite`.
+
+### Documentação
+- Achado A3 marcado como resolvido; novo achado A14 (conferência preço × quantidade removida na v2).
+
 ## [1.0.0] — 2026-11-07
 
 Primeira publicação do projeto.

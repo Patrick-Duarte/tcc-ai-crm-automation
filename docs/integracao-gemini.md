@@ -1,6 +1,6 @@
 # Integração com o Google Gemini
 
-Os três workflows usam o nó **Google Gemini** do n8n (modelo `gemini-3.1-flash-lite`), com credencial própria, que não está nos exports.
+Os três workflows usam o nó **Google Gemini** do n8n (Workflow 1: `gemini-3.5-flash-lite`; Workflows 2 e 3: `gemini-3.1-flash-lite`), com credencial própria, que não está nos exports.
 
 | Uso | Workflow | Entrada | Saída esperada | Validação no n8n |
 |---|---|---|---|---|
@@ -17,11 +17,13 @@ Valores financeiros, projeções e rankings são **calculados em JavaScript** an
 
 Regras do prompt: usar só o que está no PDF, `null` para o que faltar, valores monetários como decimais, datas `YYYY-MM-DD`, quantidades inteiras e resposta exclusivamente em JSON. Exemplo do JSON esperado para a ficha fictícia: [`examples/pedido-ficticio.json`](../examples/pedido-ficticio.json).
 
-O nó de validação remove cercas de Markdown, faz o parse e marca o pedido como `REVISAR` quando:
+O nó de validação (v2) remove cercas de Markdown, faz o parse, normaliza o tipo de cliente (`Empresa`/`PJ` ou `Pessoa Física`/`PF`) e marca o pedido como `REVISAR` quando:
 
-- falta algum campo obrigatório (`numeroPedido`, `tipoCliente`, `empresa`, `cnpj`, `produto`, `quantidade`, `prazoEntrega`, `valorTotalVenda`);
-- a quantidade não é um inteiro positivo, ou o valor total é inválido;
-- `precoVendaUnitario × quantidade` difere do total em mais de R$ 0,02.
+- falta algum campo obrigatório: `numeroPedido`, `dataAbertura`, `tipoCliente`, `contatoResponsavel`, `email`, `produto`, `quantidade`, `valorTotalVenda` e `prazoEntrega`, mais `empresa` e `cnpj` quando o cliente é Empresa;
+- o tipo de cliente não é reconhecido;
+- a quantidade não é positiva, ou o valor total é inválido.
+
+> A conferência `precoVendaUnitario × quantidade = valorTotalVenda`, que existia na v1, não está na v2 (achado A14 da [análise técnica](analise-tecnica.md)).
 
 ## 2. Parecer de viabilidade (Workflow 2)
 
