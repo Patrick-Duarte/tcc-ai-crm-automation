@@ -1,0 +1,1123 @@
+{
+  "name": "Abertura de negocio Red Geek",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Checklist de Produção",
+        "formDescription": "Red Geek 3D Studio",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Ficha do Pedido",
+              "fieldType": "file",
+              "fieldName": "ficha_pdf",
+              "multipleFiles": false,
+              "acceptFileTypes": ".pdf",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        -1744,
+        -128
+      ],
+      "id": "be4aa29f-8c33-47ab-bd05-686b7d95dca8",
+      "name": "On form submission",
+      "webhookId": "9f40acfd-f741-4bdc-986b-e08392414b90"
+    },
+    {
+      "parameters": {
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Nome do produto"
+            },
+            {
+              "fieldLabel": "Quantidade",
+              "fieldType": "number"
+            },
+            {
+              "fieldLabel": "Modelo do arquivo (STL/3MF)"
+            },
+            {
+              "fieldLabel": "Link do arquivo"
+            },
+            {
+              "fieldLabel": "Dimensões da peça"
+            },
+            {
+              "fieldLabel": "Produto personalizado?",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Sim"
+                  },
+                  {
+                    "option": "Não"
+                  }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Descrição da personalização"
+            },
+            {
+              "fieldLabel": "Prazo desejado",
+              "fieldType": "date"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 2.5,
+      "position": [
+        -544,
+        512
+      ],
+      "id": "815c00c5-048a-439d-a35e-ac0d9413bf87",
+      "name": "Dados do Produto",
+      "webhookId": "ce936edb-cd65-446a-93a3-9ec04446c04d"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n/**\n * RED GEEK 3D STUDIO\n * Checklist de Produção - Versão 2.0\n *\n * n8n - Code Node\n * Mode: Run Once for All Items\n */\n\n// ======================================\n// 1. RECUPERAR OS DADOS DOS FORMULÁRIOS\n// ======================================\n\nconst pedido = $('On form submission').first().json;\nconst produto = $('Dados do Produto').first().json;\n\n// ======================================\n// 2. IDENTIFICAR O TIPO DE CLIENTE\n// ======================================\n\nconst tipoCliente =\n  pedido['Tipo de cliente'] || 'Pessoa Física';\n\nconst isEmpresa = tipoCliente === 'Empresa';\n\n// Buscar CNPJ somente se a página foi executada\nlet dadosEmpresa = {};\n\nif (isEmpresa) {\n  try {\n    if ($('Dados da Empresa').isExecuted) {\n      dadosEmpresa =\n        $('Dados da Empresa').first().json;\n    }\n  } catch (error) {\n    dadosEmpresa = {};\n  }\n}\n\n// ======================================\n// 3. NORMALIZAÇÃO DOS DADOS\n// ======================================\n\nconst preencher = (valor) =>\n  valor === undefined ||\n  valor === null ||\n  valor === ''\n    ? 'Pendente'\n    : String(valor);\n\nconst somenteNumeros = (valor) =>\n  String(valor || '').replace(/\\D/g, '');\n\nconst email = String(\n  pedido['e-mail'] || ''\n).trim().toLowerCase();\n\nconst whatsapp = somenteNumeros(\n  pedido['WhatsApp']\n);\n\nconst cnpj = somenteNumeros(\n  dadosEmpresa['CNPJ']\n);\n\nconst cliente = String(\n  pedido['Nome do cliente'] || ''\n).trim();\n\nconst nomeProduto = String(\n  produto['Nome do produto'] || ''\n).trim();\n\nconst quantidade = Number(\n  produto['Quantidade'] || 0\n);\n\n// ======================================\n// 4. IDENTIFICAÇÃO DO CLIENTE\n// ======================================\n\nlet statusCadastro = '';\n\nif (isEmpresa) {\n  statusCadastro = cnpj\n    ? 'Empresa identificada por CNPJ'\n    : 'Empresa pendente de identificação';\n} else {\n  statusCadastro = email\n    ? 'Pessoa física identificada por e-mail'\n    : 'Pessoa física pendente de identificação';\n}\n\n// ======================================\n// 5. MONTAR O CHECKLIST FORMATADO\n// ======================================\n\nconst checklist = `CHECKLIST DE PRODUÇÃO\nRED GEEK 3D STUDIO\n\nSTATUS: AGUARDANDO ORÇAMENTO\n\n━━ DADOS DO CLIENTE ━━\nTipo: ${preencher(tipoCliente)}\nNome do contato: ${preencher(cliente)}\nE-mail: ${preencher(email)}\nWhatsApp: ${preencher(whatsapp)}\nCNPJ: ${isEmpresa ? preencher(cnpj) : 'Não se aplica'}\nSituação cadastral: ${statusCadastro}\n\n━━ DADOS DO PEDIDO ━━\nData: ${preencher(pedido['Data do pedido'])}\nCanal: ${preencher(pedido['Canal de venda'])}\n\n━━ DADOS DO PRODUTO ━━\nProduto: ${preencher(nomeProduto)}\nQuantidade: ${preencher(quantidade)}\nArquivo: ${preencher(produto['Modelo do arquivo (STL/3MF)'])}\nLink: ${preencher(produto['Link do arquivo'])}\nDimensões: ${preencher(produto['Dimensões da peça'])}\nPersonalizado: ${preencher(produto['Produto personalizado?'])}\nDescrição: ${preencher(produto['Descrição da personalização'])}\nPrazo desejado: ${preencher(produto['Prazo desejado'])}\n\n━━ ORÇAMENTO ━━\nTempo estimado: Pendente\nConsumo de filamento: Pendente\nCusto de produção: Pendente\nValor da venda: ${preencher(pedido['Valor da venda'])}\nAprovação: Pendente\n\n━━ PRODUÇÃO ━━\nImpressora: Pendente\nData de início: Pendente\nData de término: Pendente\nStatus: Não iniciada`;\n\n// ======================================\n// 6. RETORNAR OS DADOS PARA O N8N\n// ======================================\n\nreturn [\n  {\n    json: {\n      // Identificação\n      tipoCliente,\n      isEmpresa,\n      statusCadastro,\n\n      // Cliente / Contato\n      cliente,\n      email,\n      whatsapp,\n\n      // Empresa\n      cnpj,\n      possuiCnpj: cnpj.length === 14,\n\n      // Pedido\n      dataPedido: pedido['Data do pedido'] || null,\n      canal: pedido['Canal de venda'] || '',\n      valorVenda: pedido['Valor da venda'] ?? null,\n\n      // Produto\n      produto: nomeProduto,\n      quantidade,\n      modeloArquivo:\n        produto['Modelo do arquivo (STL/3MF)'] || '',\n      linkArquivo:\n        produto['Link do arquivo'] || '',\n      dimensoes:\n        produto['Dimensões da peça'] || '',\n      personalizado:\n        produto['Produto personalizado?'] || '',\n      descricaoPersonalizacao:\n        produto['Descrição da personalização'] || '',\n      prazoDesejado:\n        produto['Prazo desejado'] || null,\n\n      // Texto para o Ploomes\n      checklistFormatado: checklist\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        368
+      ],
+      "id": "85cd7a80-f0ce-414f-9021-39e898f9bfb8",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "url": "https://public-api2.ploomes.com/Contacts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "$select",
+              "value": "Id,Name,TypeId,Register"
+            },
+            {
+              "name": "$filter",
+              "value": "={{ \"TypeId eq 1 and Register eq '\" + $json.cnpj + \"'\" }}"
+            },
+            {
+              "name": "$top",
+              "value": "5"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        688,
+        -144
+      ],
+      "id": "a20d0de5-9ccb-45b8-9ded-ed8def891589",
+      "name": "Consultar Cliente Ploomes."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6b96ec7e-eb7d-4481-b461-ce270759099a",
+              "leftValue": "={{ $json.value.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1040,
+        -128
+      ],
+      "id": "2c35d5f5-0cf0-4187-ac21-80af7a3f855c",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ab9a4fea-dbc6-4aac-821b-2c16f496ed97",
+              "leftValue": "={{ $json[\"Tipo de cliente\"] }}",
+              "rightValue": "Empresa",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -816,
+        560
+      ],
+      "id": "f6a1569b-7a55-429e-a1b2-81cb9130e44d",
+      "name": "É empresa?"
+    },
+    {
+      "parameters": {
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "CNPJ"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 2.5,
+      "position": [
+        -736,
+        240
+      ],
+      "id": "fdb34131-c672-436a-8d79-09478f0273a6",
+      "name": "Dados da Empresa",
+      "webhookId": "79f5568e-6d7b-4447-8041-1633390fa291"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://public-api2.ploomes.com/Contacts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": []
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=\n{{ JSON.stringify({\n  Name: $('Validar Dados do Pedido').first().json.empresa,\n  TypeId: 1,\n  Register: $('Validar Dados do Pedido').first().json.cnpj\n}) }}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1248,
+        -112
+      ],
+      "id": "e0d20f80-3aad-4e70-9214-ebb0cb0333e4",
+      "name": "Criar Empresa Ploomes"
+    },
+    {
+      "parameters": {
+        "url": "https://public-api2.ploomes.com/Contacts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "$select",
+              "value": "Id,Name,Email,TypeId,CompanyId"
+            },
+            {
+              "name": "$filter",
+              "value": "=\n{{ \"TypeId eq 2 and Email eq '\" + $('Validar Dados do Pedido').first().json.email.replace(/'/g, \"''\") + \"'\" }}\n"
+            },
+            {
+              "name": "$top",
+              "value": "5"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": []
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1424,
+        -112
+      ],
+      "id": "7f02bd56-1419-435e-ab37-1f1224a009b1",
+      "name": "Consultar Contato Responsavel"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "edc34b53-eb35-4745-883b-4e50be44a9c3",
+              "leftValue": "={{ $json.value.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1600,
+        -112
+      ],
+      "id": "869c76df-0d32-4dfd-82af-ead538bc7be5",
+      "name": "Contato existe?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://public-api2.ploomes.com/Contacts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": []
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=\n{{ JSON.stringify({\n  Name: $('Validar Dados do Pedido').first().json.contatoResponsavel,\n  TypeId: 2,\n  Email: $('Validar Dados do Pedido').first().json.email,\n  CompanyId: $('Criar Empresa Ploomes').first().json.Id\n}) }}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1904,
+        -96
+      ],
+      "id": "c86150ac-b7a9-4f29-b769-ddc8d23aea7c",
+      "name": "Criar Contato Responsavel"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://public-api2.ploomes.com/Deals",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": []
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=\n{{ JSON.stringify((() => {\n\n  const pedido = $('Validar Dados do Pedido').first().json;\n  const empresaCriada = $('Criar Empresa Ploomes').first().json;\n\n  // ID da empresa, para a primeira fase do fluxo\n  const contatoId = empresaCriada.Id ?? empresaCriada.value?.[0]?.Id;\n\n  if (!contatoId) {\n    throw new Error('ID da empresa não encontrado.');\n  }\n\n  if (pedido.statusValidacao !== 'VALIDADO') {\n    throw new Error('Pedido não validado.');\n  }\n\n  // Identificar a opção do produto\n  const produtoVerificado = $('Verificar Produto').first().json;\n  let produtoOpcaoId = produtoVerificado.produtoOpcaoId;\n\n  if (!produtoOpcaoId) {\n    produtoOpcaoId = $('Produto Criado - ID')\n      .first().json.produtoOpcaoId;\n  }\n\n  if (!produtoOpcaoId) {\n    throw new Error('Opção do produto não identificada.');\n  }\n\n  // Valores financeiros\n  const vendaTotal = Number(pedido.valorTotalVenda);\n  const taxas = Number(pedido.taxasCanalTotal);\n  const custoProducao = Number(pedido.custoProducaoTotal);\n  const valorLiquido = Math.round((vendaTotal - taxas) * 100) / 100;\n  const lucroCalculado = Math.round(\n    (valorLiquido - custoProducao) * 100\n  ) / 100;\n\n  if (![vendaTotal, taxas, custoProducao, valorLiquido, lucroCalculado]\n    .every(Number.isFinite)) {\n    throw new Error('Valores financeiros inválidos.');\n  }\n\n  // Resumo detalhado do PDF\n  const moeda = valor =>\n    valor == null\n      ? 'Não informado'\n      : Number(valor).toLocaleString('pt-BR', {\n          style: 'currency',\n          currency: 'BRL'\n        });\n\n  const resumo = [\n    'PEDIDO: ' + pedido.numeroPedido,\n    'STATUS: AGUARDANDO ORÇAMENTO',\n    '',\n    'DADOS DO CLIENTE',\n    'Tipo: ' + pedido.tipoCliente,\n    'Empresa: ' + (pedido.empresa ?? 'Não informado'),\n    'CNPJ: ' + (pedido.cnpj ?? 'Não informado'),\n    'Responsável: ' + (pedido.contatoResponsavel ?? 'Não informado'),\n    'E-mail: ' + (pedido.email ?? 'Não informado'),\n    'WhatsApp: ' + (pedido.whatsapp ?? 'Não informado'),\n    '',\n    'DADOS DO PEDIDO',\n    'Produto: ' + pedido.produto,\n    'Quantidade: ' + pedido.quantidade,\n    'Canal: ' + pedido.canalVenda,\n    'Data do pedido: ' + pedido.dataAbertura,\n    'Entrega prevista: ' + pedido.prazoEntrega,\n    'Arquivo: ' + (pedido.linkArquivo ?? 'Não informado'),\n    'Observações: ' + (pedido.observacoes ?? 'Nenhuma'),\n    '',\n    'PRODUÇÃO',\n    'Peso unitário: ' + pedido.pesoUnitarioGramas + ' g',\n    'Peso total: ' + pedido.pesoTotalGramas + ' g',\n    'Impressão por unidade: ' + pedido.tempoImpressaoUnitarioHoras + ' h',\n    'Impressão total: ' + pedido.tempoImpressaoTotalHoras + ' h',\n    'Custo hora-máquina: ' + moeda(pedido.custoHoraMaquina),\n    '',\n    'COMPOSIÇÃO FINANCEIRA',\n    'Filamento por unidade: ' + moeda(pedido.custoFilamentoUnitario),\n    'Máquina por unidade: ' + moeda(pedido.custoMaquinaUnitario),\n    'Reserva de falhas: ' + moeda(pedido.reservaFalhasUnitario),\n    'Mão de obra: ' + moeda(pedido.custoTrabalhoUnitario),\n    'Embalagem: ' + moeda(pedido.custoEmbalagemUnitario),\n    'Custo unitário: ' + moeda(pedido.custoPecaUnitario),\n    'Preço unitário: ' + moeda(pedido.precoVendaUnitario),\n    '',\n    'TOTAIS',\n    'Venda bruta: ' + moeda(vendaTotal),\n    'Taxas: ' + moeda(taxas),\n    'Valor líquido: ' + moeda(valorLiquido),\n    'Custo de produção: ' + moeda(custoProducao),\n    'Lucro estimado: ' + moeda(lucroCalculado)\n  ].join('\\n');\n\n  return {\n    Title: pedido.numeroPedido + ' - ' + pedido.produto,\n    ContactId: contatoId,\n    Amount: valorLiquido,\n    PipelineId: pedido.pipelineId,\n    StageId: pedido.stageId,\n\n    OtherProperties: [\n\n        \n      // Canal de venda: Venda direta\n      {\n        FieldKey: 'deal_00000000-0000-0000-0000-000000000003',\n        IntegerValue: 2000004\n      },\n\n      // Quantidade de itens\n      {\n        FieldKey: 'deal_00000000-0000-0000-0000-000000000004',\n        IntegerValue: Number(pedido.quantidade)\n      },\n\n      // Valor dos produtos\n      {\n        FieldKey: 'deal_00000000-0000-0000-0000-000000000005',\n        DecimalValue: vendaTotal\n      },\n\n      // Valor fechado\n      {\n        FieldKey: 'deal_00000000-0000-0000-0000-000000000006',\n        DecimalValue: vendaTotal\n      },\n\n      // Total de taxas\n      {\n        FieldKey: 'deal_00000000-0000-0000-0000-000000000007',\n        DecimalValue: taxas\n      },\n\n      // Data do Pedido\n      {\n        FieldKey: 'deal_00000000-0000-0000-0000-000000000008',\n        DateTimeValue: pedido.dataAbertura + 'T00:00:00'\n      },\n\n      // Produto da venda\n      {\n        FieldKey: 'deal_00000000-0000-0000-0000-000000000009',\n        IntegerValue: Number(produtoOpcaoId)\n      },\n\n      // Data para entrega\n      {\n        FieldKey: 'deal_00000000-0000-0000-0000-000000000010',\n        DateTimeValue: pedido.prazoEntrega + 'T00:00:00'\n      },\n\n      // Custo de produção\n      {\n        FieldKey: 'deal_00000000-0000-0000-0000-000000000011',\n        DecimalValue: custoProducao\n      },\n\n      // Lucro estimado\n      {\n        FieldKey: 'deal_00000000-0000-0000-0000-000000000012',\n        DecimalValue: lucroCalculado\n      },\n\n      // Tempo total de impressão\n      {\n        FieldKey: 'deal_00000000-0000-0000-0000-000000000013',\n        IntegerValue: Number(pedido.tempoImpressaoTotalHoras)\n      },\n\n      // Solicitação da demanda\n      {\n        FieldKey: 'deal_00000000-0000-0000-0000-000000000001',\n        BigStringValue: resumo\n      }\n\n    ]\n  };\n\n})()) }}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2176,
+        -96
+      ],
+      "id": "e1ab25d9-377c-440c-8ade-552f1c6e819f",
+      "name": "Criar negocio Ploomes"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.tipoCliente }}",
+                    "rightValue": "Empresa",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "051c04ca-9227-4dc9-be16-1534fa5f017a"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Empresa"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "898728a5-0cf6-4732-b5c8-371c9be01d99",
+                    "leftValue": "={{ $json.tipoCliente }}",
+                    "rightValue": "Pessoa Física",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Pessoa Física"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        448,
+        0
+      ],
+      "id": "111792ff-f981-4baf-8183-525b7b3af962",
+      "name": "Tipo de Cliente"
+    },
+    {
+      "parameters": {
+        "url": "https://public-api2.ploomes.com/Contacts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "$select",
+              "value": "Id,Name,Email,TypeId,CompanyId"
+            },
+            {
+              "name": "$filter",
+              "value": "= {{   \"TypeId eq 2 and Email eq '\" +   $json.email.replace(/'/g, \"''\") +   \"'\" }}"
+            },
+            {
+              "name": "$top",
+              "value": "5"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": []
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        672,
+        224
+      ],
+      "id": "4ff9aab6-917e-4260-84ad-1c3c516fffd7",
+      "name": "Consultar pessoa fisica"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c425bd9c-344e-464a-bbea-11a271d37b62",
+              "leftValue": "={{ $json.value.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        864,
+        96
+      ],
+      "id": "71ecd582-0372-4fee-8089-95185322f2b9",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://public-api2.ploomes.com/Contacts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": []
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=\n{{ JSON.stringify({\n  Name: $('Code in JavaScript').first().json.cliente,\n  TypeId: 2,\n  Email: $('Code in JavaScript').first().json.email\n}) }}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1104,
+        480
+      ],
+      "id": "8210fba5-de03-4c1b-9360-b02c8cd7960a",
+      "name": "Criar pessoa fisica"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://public-api2.ploomes.com/Deals",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": []
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=\n{{ JSON.stringify({\n  Title: \"Orçamento - \" +\n    $('Code in JavaScript').first().json.produto +\n    \" - \" +\n    $('Code in JavaScript').first().json.quantidade +\n    \" unidades\",\n\n  ContactId: $json.contactId ??\n    $json.value?.[0]?.Id,\n\n  PipelineId: 1000001,\n  StageId: 1000002,\n\n  OtherProperties: [\n    {\n      FieldKey: \"deal_00000000-0000-0000-0000-000000000001\",\n      BigStringValue:\n        $('Code in JavaScript').first().json.checklistFormatado\n    }\n  ]\n}) }}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1488,
+        256
+      ],
+      "id": "e2a448ba-7f39-4224-a477-85850c6342f4",
+      "name": "Criar Negocio Pessoa Fisica."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "03b1bcba-9ef9-4e84-be0f-57ecf4d63f39",
+              "name": "contactId",
+              "value": "={{ $json.value[0].Id }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1200,
+        128
+      ],
+      "id": "e687e0ee-f95b-41bd-b87b-c64d81a2f3ca",
+      "name": "Pessoa Existente - ID"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "ficha_pdf",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -1520,
+        -128
+      ],
+      "id": "a314e469-20e5-4a16-8842-45125097e24c",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-3.1-flash-lite",
+          "mode": "list",
+          "cachedResultName": "models/gemini-3.1-flash-lite"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=\nVocê é um especialista em extração de dados de fichas\nde pedidos da Red Geek 3D Studio.\n\nSua tarefa é interpretar o texto extraído de um PDF\ne transformá-lo em um JSON estruturado.\n\nREGRAS:\n1. Utilize exclusivamente informações presentes no PDF.\n2. Não invente informações ausentes.\n3. Campos não encontrados devem receber null.\n4. Valores monetários devem ser números decimais.\n5. Datas devem estar no formato YYYY-MM-DD.\n6. Quantidades devem ser números inteiros.\n7. Não altere valores financeiros apresentados.\n8. Responda exclusivamente com JSON válido.\n9. Não utilize blocos Markdown ou explicações.\n10. Preserve os links e identificadores originais.\n\nTEXTO DO PDF:\n{{ $json.text }}\n\nRETORNE EXATAMENTE ESTA ESTRUTURA:\n\n{\n  \"numeroPedido\": null,\n  \"dataAbertura\": null,\n  \"tipoCliente\": null,\n  \"empresa\": null,\n  \"cnpj\": null,\n  \"contatoResponsavel\": null,\n  \"email\": null,\n  \"whatsapp\": null,\n  \"produto\": null,\n  \"quantidade\": null,\n  \"canalVenda\": null,\n  \"prazoEntrega\": null,\n  \"linkArquivo\": null,\n  \"observacoes\": null,\n  \"pesoUnitarioGramas\": null,\n  \"pesoTotalGramas\": null,\n  \"tempoImpressaoUnitarioHoras\": null,\n  \"tempoImpressaoTotalHoras\": null,\n  \"precoFilamentoKg\": null,\n  \"percentualDesperdicio\": null,\n  \"custoHoraMaquina\": null,\n  \"custoFilamentoUnitario\": null,\n  \"custoMaquinaUnitario\": null,\n  \"reservaFalhasUnitario\": null,\n  \"custoTrabalhoUnitario\": null,\n  \"custoEmbalagemUnitario\": null,\n  \"custoPecaUnitario\": null,\n  \"margemInformadaPercentual\": null,\n  \"taxasCanalUnitario\": null,\n  \"precoVendaUnitario\": null,\n  \"lucroUnitario\": null,\n  \"valorTotalVenda\": null,\n  \"custoProducaoTotal\": null,\n  \"taxasCanalTotal\": null,\n  \"lucroTotal\": null\n}\n"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        -1328,
+        -128
+      ],
+      "id": "9a979dd3-cb09-4ed8-9143-599274c97bb4",
+      "name": "Message a model"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst resposta = $input.first().json;\n\nlet texto = resposta.content?.parts?.[0]?.text;\n\nif (!texto) {\n  throw new Error(\"O Gemini não retornou o JSON do pedido.\");\n}\n\ntexto = texto\n  .replace(/```json\\s*/gi, \"\")\n  .replace(/```\\s*/g, \"\")\n  .trim();\n\nlet pedido;\n\ntry {\n  pedido = JSON.parse(texto);\n} catch (erro) {\n  throw new Error(\"JSON inválido retornado pelo Gemini: \" + erro.message);\n}\n\nconst obrigatorios = [\n  \"numeroPedido\",\n  \"tipoCliente\",\n  \"empresa\",\n  \"cnpj\",\n  \"produto\",\n  \"quantidade\",\n  \"prazoEntrega\",\n  \"valorTotalVenda\"\n];\n\nconst faltantes = obrigatorios.filter(campo =>\n  pedido[campo] === null ||\n  pedido[campo] === undefined ||\n  pedido[campo] === \"\"\n);\n\nif (!Number.isInteger(pedido.quantidade) || pedido.quantidade <= 0) {\n  faltantes.push(\"quantidade inválida\");\n}\n\nif (\n  typeof pedido.valorTotalVenda !== \"number\" ||\n  !Number.isFinite(pedido.valorTotalVenda) ||\n  pedido.valorTotalVenda < 0\n) {\n  faltantes.push(\"valorTotalVenda inválido\");\n}\n\nconst totalCalculado =\n  pedido.precoVendaUnitario * pedido.quantidade;\n\nconst diferenca =\n  Math.abs(totalCalculado - pedido.valorTotalVenda);\n\nconst alertas = [];\n\nif (Number.isFinite(diferenca) && diferenca > 0.02) {\n  alertas.push(\n    \"Divergência entre preço unitário e total da venda.\"\n  );\n}\n\nconst statusValidacao =\n  faltantes.length > 0 || alertas.length > 0\n    ? \"REVISAR\"\n    : \"VALIDADO\";\n\nreturn [{\n  json: {\n    ...pedido,\n    statusValidacao,\n    camposFaltantes: [...new Set(faltantes)],\n    alertas,\n    tituloNegocio:\n      `Orçamento - ${pedido.produto} - ${pedido.quantidade} unidades`,\n    pipelineId: 1000001,\n    stageId: 1000002\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -976,
+        -128
+      ],
+      "id": "6829c60b-dc5b-4947-b586-ceca66168e82",
+      "name": "Validar Dados do Pedido"
+    },
+    {
+      "parameters": {
+        "url": "https://public-api2.ploomes.com/Fields@OptionsTables",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "$select",
+              "value": "Id,Name"
+            },
+            {
+              "name": "$top",
+              "value": "100"
+            },
+            {
+              "name": "$filter",
+              "value": "Id eq 3000001"
+            },
+            {
+              "name": "$expand",
+              "value": "Options"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -576,
+        -304
+      ],
+      "id": "7291763a-a3ba-4a8d-8701-c84f906ea513",
+      "name": "Consultar Opções de Produtos"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst pedido = $('Validar Dados do Pedido').first().json;\n\nconst tabela = $('Consultar Opções de Produtos')\n  .first().json.value[0];\n\nconst nomeProduto = pedido.produto.trim();\n\nconst normalizar = texto => String(texto)\n  .trim()\n  .normalize('NFD')\n  .replace(/[\\u0300-\\u036f]/g, '')\n  .toLowerCase()\n  .replace(/\\s+/g, ' ');\n\nconst produtoExistente = (tabela.Options || []).find(\n  opcao => normalizar(opcao.Name) === normalizar(nomeProduto)\n);\n\nreturn [{\n  json: {\n    ...pedido,\n    nomeProduto,\n    produtoExiste: Boolean(produtoExistente),\n    produtoOpcaoId: produtoExistente?.Id ?? null,\n    optionsTableId: tabela.Id\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -368,
+        -304
+      ],
+      "id": "8af46bf9-2add-466a-8ab2-39e33e73e845",
+      "name": "Verificar Produto"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "5e7f1c3f-46eb-48c3-a851-6c3aef985b7c",
+              "leftValue": "={{ $json.produtoExiste }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -160,
+        -304
+      ],
+      "id": "7ca6ca1f-1202-4a1b-832e-ee4660659f8f",
+      "name": "Produto Existe?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://public-api2.ploomes.com/Fields@OptionsTables@Options",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  TableId: $json.optionsTableId,\n  Name: $json.nomeProduto\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -128,
+        -128
+      ],
+      "id": "5e944823-7e42-4ddb-8e79-263f5ddaca3c",
+      "name": "Criar Opção de Produto"
+    },
+    {
+      "parameters": {
+        "jsCode": "const pedido = $('Verificar Produto').first().json;\nconst resposta = $input.first().json;\n\nconst produtoOpcaoId = resposta.Id ?? resposta.value?.[0]?.Id;\n\nif (!produtoOpcaoId) {\n  throw new Error('A criação do produto não retornou um ID.');\n}\n\nreturn [{\n  json: {\n    ...pedido,\n    produtoExiste: true,\n    produtoOpcaoId\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        32
+      ],
+      "id": "1174dc9b-2448-483c-803b-5295ebb61bb3",
+      "name": "Produto Criado - ID"
+    },
+    {
+      "parameters": {
+        "url": "https://public-api2.ploomes.com/Fields",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "$filter",
+              "value": "EntityId eq 2 and (Id eq 40000421 or Id eq 40000424 or Id eq 40000425 or Id eq 40000430 or Id eq 40000432 or Id eq 40000446)"
+            },
+            {
+              "name": "$select",
+              "value": "Id,Name,Key,TypeId,OptionsTableId"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        16,
+        784
+      ],
+      "id": "8da16c0f-5254-4d28-b4e3-fb2dfe8d0a41",
+      "name": "Consultar Campos de Vendas"
+    },
+    {
+      "parameters": {
+        "url": "https://public-api2.ploomes.com/Fields@OptionsTables",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "$filter",
+              "value": "Id eq 3000002"
+            },
+            {
+              "name": "$expand",
+              "value": "Options"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        224,
+        784
+      ],
+      "id": "50fdd5ec-0c66-4dcd-a520-128aa38b0f38",
+      "name": "Consultar Opções de Canal"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dados do Produto": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        []
+      ]
+    },
+    "Consultar Cliente Ploomes.": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Criar Empresa Ploomes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É empresa?": {
+      "main": [
+        [
+          {
+            "node": "Dados da Empresa",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dados do Produto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dados da Empresa": {
+      "main": [
+        [
+          {
+            "node": "Dados do Produto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar Empresa Ploomes": {
+      "main": [
+        [
+          {
+            "node": "Consultar Contato Responsavel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar Contato Responsavel": {
+      "main": [
+        [
+          {
+            "node": "Contato existe?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Contato existe?": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Criar Contato Responsavel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar Contato Responsavel": {
+      "main": [
+        [
+          {
+            "node": "Criar negocio Ploomes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tipo de Cliente": {
+      "main": [
+        [
+          {
+            "node": "Consultar Cliente Ploomes.",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Consultar pessoa fisica",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar pessoa fisica": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Pessoa Existente - ID",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Criar pessoa fisica",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar pessoa fisica": {
+      "main": [
+        [
+          {
+            "node": "Criar Negocio Pessoa Fisica.",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar negocio Ploomes": {
+      "main": [
+        []
+      ]
+    },
+    "Pessoa Existente - ID": {
+      "main": [
+        [
+          {
+            "node": "Criar Negocio Pessoa Fisica.",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Validar Dados do Pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Dados do Pedido": {
+      "main": [
+        [
+          {
+            "node": "Consultar Opções de Produtos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar Opções de Produtos": {
+      "main": [
+        [
+          {
+            "node": "Verificar Produto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar Produto": {
+      "main": [
+        [
+          {
+            "node": "Produto Existe?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Produto Existe?": {
+      "main": [
+        [
+          {
+            "node": "Tipo de Cliente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Criar Opção de Produto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar Opção de Produto": {
+      "main": [
+        [
+          {
+            "node": "Produto Criado - ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Produto Criado - ID": {
+      "main": [
+        [
+          {
+            "node": "Tipo de Cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar Campos de Vendas": {
+      "main": [
+        [
+          {
+            "node": "Consultar Opções de Canal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": []
+}

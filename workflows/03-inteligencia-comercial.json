@@ -1,0 +1,971 @@
+{
+  "name": "Red Geek | Inteligencia Comercial",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://public-api2.ploomes.com/Fields",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "$filter",
+              "value": "EntityId eq 2 and Dynamic eq true"
+            },
+            {
+              "name": "$select",
+              "value": "Id,Name,Key,TypeId"
+            },
+            {
+              "name": "$top",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        208,
+        0
+      ],
+      "id": "e35b941c-5aea-4283-b76b-942a08ec1b0a",
+      "name": "Consultar Campos Comerciais"
+    },
+    {
+      "parameters": {
+        "url": "https://public-api2.ploomes.com/Deals",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "$filter",
+              "value": "PipelineId eq 1000001 and StatusId eq 2"
+            },
+            {
+              "name": "$select",
+              "value": "Id,Title,Amount,StatusId,FinishDate"
+            },
+            {
+              "name": "$expand",
+              "value": "OtherProperties"
+            },
+            {
+              "name": "$top",
+              "value": "100"
+            },
+            {
+              "name": "$orderby",
+              "value": "Id asc"
+            }
+          ]
+        },
+        "options": {
+          "pagination": {
+            "pagination": {
+              "parameters": {
+                "parameters": [
+                  {
+                    "name": "$skip",
+                    "value": "={{ $pageCount * 100 }}"
+                  }
+                ]
+              },
+              "paginationCompleteWhen": "other",
+              "completeExpression": "={{ $response.body.value.length < 100 }}"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        416,
+        0
+      ],
+      "id": "98f4d636-6f82-4a12-8b56-1689a2410e18",
+      "name": "Consultar Vendas Ploomes"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n/*\n RED GEEK 3D STUDIO\n Inteligência Comercial — Ploomes + n8n + Gemini\n\n - Consulta negócios ganhos\n - Usa Data do Pedido\n - Calcula faturamento, líquido e taxas\n - Analisa canais e meses\n - Separa produtos descritos como:\n   5x Produto A;1x Produto B\n - Valida quantidades\n - Calcula projeção de 3 meses\n - Prepara prompt para Gemini\n*/\n\nconst entradas = $input.all();\n\n// Reúne negócios de todas as páginas da API\nconst negocios = entradas.flatMap(item => {\n  const dados = item.json;\n\n  if (Array.isArray(dados)) {\n    return dados.flatMap(x =>\n      Array.isArray(x.value) ? x.value : x.Id ? [x] : []\n    );\n  }\n\n  if (Array.isArray(dados.value)) return dados.value;\n  if (dados.Id) return [dados];\n\n  return [];\n});\n\n// IDs dos campos da Red Geek no Ploomes\nconst F = {\n  pedido: 40000420,\n  canal: 40000421,\n  situacao: 40000422,\n  produto: 40000423,\n  quantidade: 40000424,\n  valorProdutos: 40000425,\n  desconto: 40000426,\n  freteCobrado: 40000427,\n  outrasDespesas: 40000428,\n  comissao: 40000429,\n  bruto: 40000430,\n  custoFrete: 40000431,\n  taxas: 40000432,\n  data: 40000446\n};\n\nfunction campo(deal, id) {\n  const p = (deal.OtherProperties || [])\n    .find(x => x.FieldId === id);\n\n  if (!p) return null;\n\n  return p.ObjectValueName ??\n    p.DecimalValue ??\n    p.IntegerValue ??\n    p.DateTimeValue ??\n    p.BigStringValue ??\n    p.StringValue ??\n    null;\n}\n\nfunction numero(valor) {\n  if (valor == null || valor === \"\") return 0;\n\n  const n = Number(valor);\n  return Number.isFinite(n) ? n : 0;\n}\n\nfunction arred(valor) {\n  return Math.round((valor + Number.EPSILON) * 100) / 100;\n}\n\nfunction somar(lista, chave) {\n  return lista.reduce(\n    (total, item) => total + numero(item[chave]), 0\n  );\n}\n\n// Evita negócios duplicados entre páginas\nconst vistos = new Set();\nconst vendas = [];\nlet negociosSemData = 0;\n\nfor (const d of negocios) {\n  if (d.StatusId !== 2) continue;\n  if (vistos.has(d.Id)) continue;\n\n  vistos.add(d.Id);\n\n  const data = campo(d, F.data);\n\n  if (!data) {\n    negociosSemData++;\n    continue;\n  }\n\n  const dataPedido = String(data).slice(0, 10);\n\n  vendas.push({\n    negocioId: d.Id,\n    pedido: campo(d, F.pedido),\n    data: dataPedido,\n    mes: dataPedido.slice(0, 7),\n    canal: campo(d, F.canal) || \"Não informado\",\n    situacao: campo(d, F.situacao),\n    produtoOriginal: campo(d, F.produto) || \"\",\n    quantidade: numero(campo(d, F.quantidade)),\n    bruto: numero(campo(d, F.bruto)),\n    liquido: numero(d.Amount),\n    taxas: numero(campo(d, F.taxas)),\n    comissao: numero(campo(d, F.comissao)),\n    custoFrete: numero(campo(d, F.custoFrete)),\n    desconto: numero(campo(d, F.desconto)),\n    freteCobrado: numero(campo(d, F.freteCobrado)),\n    outrasDespesas: numero(campo(d, F.outrasDespesas))\n  });\n}\n\n// =====================================\n// 1. ANÁLISE MENSAL\n// =====================================\n\nconst porMes = {};\n\nfor (const v of vendas) {\n  if (!porMes[v.mes]) {\n    porMes[v.mes] = {\n      mes: v.mes,\n      pedidos: 0,\n      bruto: 0,\n      liquido: 0,\n      taxas: 0\n    };\n  }\n\n  const m = porMes[v.mes];\n  m.pedidos++;\n  m.bruto += v.bruto;\n  m.liquido += v.liquido;\n  m.taxas += v.taxas;\n}\n\nconst historicoMensal = Object.values(porMes)\n  .map(m => ({\n    mes: m.mes,\n    pedidos: m.pedidos,\n    bruto: arred(m.bruto),\n    liquido: arred(m.liquido),\n    taxas: arred(m.taxas),\n    percentualTaxas: m.bruto > 0\n      ? arred(m.taxas / m.bruto * 100)\n      : 0\n  }))\n  .sort((a, b) => a.mes.localeCompare(b.mes));\n\n// =====================================\n// 2. ANÁLISE POR CANAL\n// =====================================\n\nconst porCanal = {};\n\nfor (const v of vendas) {\n  if (!porCanal[v.canal]) {\n    porCanal[v.canal] = {\n      canal: v.canal,\n      pedidos: 0,\n      bruto: 0,\n      liquido: 0,\n      taxas: 0,\n      comissao: 0,\n      custoFrete: 0\n    };\n  }\n\n  const c = porCanal[v.canal];\n\n  c.pedidos++;\n  c.bruto += v.bruto;\n  c.liquido += v.liquido;\n  c.taxas += v.taxas;\n  c.comissao += v.comissao;\n  c.custoFrete += v.custoFrete;\n}\n\nconst rankingCanais = Object.values(porCanal)\n  .map(c => ({\n    canal: c.canal,\n    pedidos: c.pedidos,\n    bruto: arred(c.bruto),\n    liquido: arred(c.liquido),\n    taxas: arred(c.taxas),\n    comissao: arred(c.comissao),\n    custoFrete: arred(c.custoFrete),\n    percentualTaxas: c.bruto > 0\n      ? arred(c.taxas / c.bruto * 100)\n      : 0,\n    ticketMedio: c.pedidos > 0\n      ? arred(c.bruto / c.pedidos)\n      : 0\n  }))\n  .sort((a, b) => b.bruto - a.bruto);\n\n// =====================================\n// 3. INTERPRETAÇÃO DOS PRODUTOS\n// =====================================\n\nconst produtosAgrupados = new Map();\nconst pedidosDivergentes = [];\n\nlet pedidosProdutosValidados = 0;\nlet unidadesValidadas = 0;\nlet pedidosMultiplosProdutos = 0;\n\nfor (const v of vendas) {\n  const texto = String(v.produtoOriginal).trim();\n\n  // Separa os itens pelo ponto e vírgula\n  const partes = texto.split(\";\")\n    .map(p => p.trim())\n    .filter(Boolean);\n\n  const itens = partes.map(parte => {\n    // Aceita 5x, 5X ou 5×\n    const match = parte.match(\n      /^(\\d+)\\s*[x×]\\s*(.+)$/i\n    );\n\n    if (!match) return null;\n\n    const quantidade = Number(match[1]);\n    const nome = match[2].trim()\n      .replace(/\\s+/g, \" \");\n\n    if (!nome || quantidade <= 0) return null;\n\n    return { nome, quantidade };\n  });\n\n  const totalInterpretado = itens.reduce(\n    (total, item) => total + (item?.quantidade || 0),\n    0\n  );\n\n  const valido =\n    partes.length > 0 &&\n    itens.every(item => item !== null) &&\n    Number.isInteger(v.quantidade) &&\n    totalInterpretado === v.quantidade;\n\n  // Pedidos com erro não entram no ranking\n  if (!valido) {\n    pedidosDivergentes.push({\n      pedido: v.pedido,\n      negocioId: v.negocioId,\n      quantidadePedido: v.quantidade,\n      quantidadeInterpretada: totalInterpretado,\n      descricao: texto || \"Produto não informado\"\n    });\n\n    continue;\n  }\n\n  pedidosProdutosValidados++;\n  unidadesValidadas += totalInterpretado;\n\n  if (itens.length > 1) {\n    pedidosMultiplosProdutos++;\n  }\n\n  // Conta cada pedido uma vez por produto\n  const produtosNoPedido = new Set();\n\n  for (const item of itens) {\n    const chave = item.nome.toLowerCase();\n\n    if (!produtosAgrupados.has(chave)) {\n      produtosAgrupados.set(chave, {\n        produto: item.nome,\n        quantidade: 0,\n        pedidos: 0\n      });\n    }\n\n    const registro = produtosAgrupados.get(chave);\n\n    registro.quantidade += item.quantidade;\n\n    if (!produtosNoPedido.has(chave)) {\n      registro.pedidos++;\n      produtosNoPedido.add(chave);\n    }\n  }\n}\n\nconst rankingProdutos = [...produtosAgrupados.values()]\n  .sort((a, b) =>\n    b.quantidade - a.quantidade ||\n    b.pedidos - a.pedidos\n  );\n\nconst auditoriaProdutos = {\n  pedidosValidados: pedidosProdutosValidados,\n  pedidosDivergentes: pedidosDivergentes.length,\n  pedidosComMultiplosProdutos: pedidosMultiplosProdutos,\n  unidadesValidadas,\n  produtosDistintos: rankingProdutos.length,\n  exemplosDivergentes: pedidosDivergentes.slice(0, 20)\n};\n\n// =====================================\n// 4. PROJEÇÃO DOS PRÓXIMOS 3 MESES\n// =====================================\n\nconst mesAtual = new Intl.DateTimeFormat(\n  \"en-CA\", {\n    timeZone: \"America/Sao_Paulo\",\n    year: \"numeric\",\n    month: \"2-digit\"\n  }\n).format(new Date()).replace(\"/\", \"-\");\n\nconst mesesCompletos = historicoMensal\n  .filter(m => m.mes < mesAtual);\n\nconst ultimos3 = mesesCompletos.slice(-3);\n\nlet projecoes = [];\nlet metodoProjecao = \"Dados históricos insuficientes\";\n\nif (ultimos3.length === 3) {\n  const indices = ultimos3.map(m => {\n    const [ano, mes] = m.mes.split(\"-\").map(Number);\n    return ano * 12 + mes;\n  });\n\n  const consecutivos =\n    indices[1] === indices[0] + 1 &&\n    indices[2] === indices[1] + 1;\n\n  if (consecutivos) {\n    const media = arred(\n      somar(ultimos3, \"bruto\") / 3\n    );\n\n    metodoProjecao =\n      \"Média móvel simples dos últimos 3 meses completos\";\n\n    const [ano, mes] = ultimos3[2].mes\n      .split(\"-\").map(Number);\n\n    for (let i = 1; i <= 3; i++) {\n      const data = new Date(\n        Date.UTC(ano, mes - 1 + i, 1)\n      );\n\n      projecoes.push({\n        mes: data.toISOString().slice(0, 7),\n        faturamentoPrevisto: media\n      });\n    }\n  }\n}\n\n// =====================================\n// 5. RESUMO EXECUTIVO\n// =====================================\n\nconst faturamentoBruto = arred(somar(vendas, \"bruto\"));\nconst recebimentoLiquido = arred(somar(vendas, \"liquido\"));\nconst totalTaxas = arred(somar(vendas, \"taxas\"));\n\nconst relatorio = {\n  dataGeracao: new Date().toISOString(),\n  periodoInicial: historicoMensal[0]?.mes || null,\n  periodoFinal:\n    historicoMensal[historicoMensal.length - 1]?.mes || null,\n\n  totalNegocios: vendas.length,\n  negociosSemData,\n\n  faturamentoBruto,\n  recebimentoLiquido,\n  totalTaxas,\n\n  percentualTaxas: faturamentoBruto > 0\n    ? arred(totalTaxas / faturamentoBruto * 100)\n    : 0,\n\n  ticketMedio: vendas.length > 0\n    ? arred(faturamentoBruto / vendas.length)\n    : 0,\n\n  historicoMensal,\n  rankingCanais,\n  rankingProdutos,\n  auditoriaProdutos,\n\n  metodoProjecao,\n  projecoes,\n\n  avisos: [\n    \"A data oficial da venda é Data do Pedido.\",\n    \"Recebimento líquido não representa lucro.\",\n    \"Ainda faltam custos para calcular rentabilidade real.\",\n    \"As quantidades do ranking de produtos foram validadas.\",\n    \"Pedidos divergentes não entram no ranking de produtos.\",\n    \"Não há faturamento individual confiável para produtos em pedidos mistos.\",\n    \"Projeções são estimativas e não garantem vendas futuras.\"\n  ]\n};\n\n// =====================================\n// 6. PROMPT PARA O GEMINI\n// =====================================\n\n// Limita o tamanho do prompt sem perder\n// os totais nem os indicadores principais\nconst dadosIA = {\n  ...relatorio,\n  rankingProdutos: rankingProdutos.slice(0, 30),\n  auditoriaProdutos: {\n    ...auditoriaProdutos,\n    exemplosDivergentes:\n      auditoriaProdutos.exemplosDivergentes.slice(0, 10)\n  }\n};\n\nconst promptIA = `\nVocê é um analista de inteligência comercial\nda Red Geek 3D Studio.\n\nCrie um relatório executivo profissional em português.\n\nESTRUTURA:\n\n1. Resumo comercial do período.\n2. Faturamento bruto e recebimento líquido.\n3. Evolução mensal e tendências.\n4. Comparação entre canais de venda.\n5. Ranking dos produtos por unidades vendidas.\n6. Projeções para os próximos 3 meses, se disponíveis.\n7. Riscos, oportunidades e ações recomendadas.\n8. Qualidade e limitações dos dados.\n\nREGRAS OBRIGATÓRIAS:\n\n- Utilize somente os dados fornecidos.\n- Não invente faturamento, custos ou quantidades.\n- Não confunda valor líquido com lucro.\n- O ranking de produtos considera somente pedidos validados.\n- A quantidade dos produtos foi extraída de textos\n  como \"5x Produto A;1x Produto B\".\n- Não atribua faturamento total de pedidos mistos\n  a um único produto.\n- Não afirme que um produto é mais lucrativo\n  sem conhecer seu custo.\n- Informe quantos pedidos tiveram divergências.\n- A lista de produtos recebida contém no máximo\n  os 30 primeiros do ranking.\n- As projeções foram calculadas pelo n8n.\n  Não altere os valores projetados.\n- Diferencie fatos, hipóteses e recomendações.\n- Considere o períodoInicial e periodoFinal,\n  não invente um mês de referência.\n- Seja objetivo, analítico e estratégico.\n\nDADOS COMERCIAIS:\n${JSON.stringify(dadosIA)}\n`;\n\nreturn [{\n  json: {\n    ...relatorio,\n    promptIA\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        0
+      ],
+      "id": "2b8e733e-b6ff-4b38-af83-a420eb0f5adb",
+      "name": "Calcular Indicadores Comerciais"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-3.1-flash-lite",
+          "mode": "list",
+          "cachedResultName": "models/gemini-3.1-flash-lite"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.promptIA }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        832,
+        0
+      ],
+      "id": "73a75b6c-f23a-4129-b8fc-0102c7e0fb58",
+      "name": "Message a model"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst indicadores = $('Calcular Indicadores Comerciais')\n  .first().json;\n\nconst respostaGemini = $input.first().json;\n\nconst textoRelatorio =\n  respostaGemini.content?.parts\n    ?.map(parte => parte.text || \"\")\n    .join(\"\\n\") || \"\";\n\nif (!textoRelatorio.trim()) {\n  throw new Error(\"O Gemini não retornou um relatório.\");\n}\n\nreturn [{\n  json: {\n    dataGeracao: indicadores.dataGeracao,\n    periodoInicial: indicadores.periodoInicial,\n    periodoFinal: indicadores.periodoFinal,\n\n    totalNegocios: indicadores.totalNegocios,\n    faturamentoBruto: indicadores.faturamentoBruto,\n    recebimentoLiquido: indicadores.recebimentoLiquido,\n    totalTaxas: indicadores.totalTaxas,\n    percentualTaxas: indicadores.percentualTaxas,\n    ticketMedio: indicadores.ticketMedio,\n\n    historicoMensal: indicadores.historicoMensal,\n    rankingCanais: indicadores.rankingCanais,\n    rankingProdutos: indicadores.rankingProdutos,\n    auditoriaProdutos: indicadores.auditoriaProdutos,\n    projecoes: indicadores.projecoes,\n\n    relatorioIA: textoRelatorio,\n    status: \"GERADO\"\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1184,
+        0
+      ],
+      "id": "39e51c87-2d22-4caf-bc4f-f437b346a0f8",
+      "name": "Preparar Relatorio Executivo"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "SEU_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Relatorios_IA",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "dataGeracao": "={{ $json.dataGeracao }}",
+            "periodoInicial": "={{ $json.periodoInicial }}",
+            "periodoFinal": "={{ $json.periodoFinal }}",
+            "faturamentoBruto": "={{ $json.faturamentoBruto }}",
+            "recebimentoLiquido": "={{ $json.recebimentoLiquido }}",
+            "totalTaxas": "={{ $json.totalTaxas }}",
+            "percentualTaxas": "={{ $json.percentualTaxas }}",
+            "relatorioIA": "={{ $json.relatorioIA }}",
+            "totalNegocios": "={{ Number($json.totalNegocios) }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "dataGeracao",
+              "displayName": "dataGeracao",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "periodoInicial",
+              "displayName": "periodoInicial",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "periodoFinal",
+              "displayName": "periodoFinal",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "totalNegocios",
+              "displayName": "totalNegocios",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "faturamentoBruto",
+              "displayName": "faturamentoBruto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "recebimentoLiquido",
+              "displayName": "recebimentoLiquido",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "totalTaxas",
+              "displayName": "totalTaxas",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "percentualTaxas",
+              "displayName": "percentualTaxas",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "relatorioIA",
+              "displayName": "relatorioIA",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1392,
+        0
+      ],
+      "id": "66185e42-9908-49c8-9600-40d49ed61835",
+      "name": "Append row in sheet"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst relatorio = $('Preparar Relatorio Executivo')\n  .first().json;\n\nconst historico = relatorio.historicoMensal || [];\n\nreturn historico.map(mes => ({\n  json: {\n    mes: mes.mes,\n    pedidos: Number(mes.pedidos),\n    bruto: Number(mes.bruto),\n    liquido: Number(mes.liquido),\n    taxas: Number(mes.taxas),\n    percentualTaxas: Number(mes.percentualTaxas)\n  }\n}));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        0
+      ],
+      "id": "aa053d40-1215-4f37-942f-a135de3897d6",
+      "name": "Preparar Indicadores Mensais"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "SEU_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Indicadores",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "mes": "={{ $json.mes }}",
+            "pedidos": "={{ $json.pedidos }}",
+            "bruto": "={{ $json.bruto }}",
+            "liquido": "={{ $json.liquido }}",
+            "taxas": "={{ $json.taxas }}",
+            "percentualTaxas": "={{ $json.percentualTaxas }}"
+          },
+          "matchingColumns": [
+            "mes"
+          ],
+          "schema": [
+            {
+              "id": "mes",
+              "displayName": "mes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "pedidos",
+              "displayName": "pedidos",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "bruto",
+              "displayName": "bruto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "liquido",
+              "displayName": "liquido",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "taxas",
+              "displayName": "taxas",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "percentualTaxas",
+              "displayName": "percentualTaxas",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1808,
+        0
+      ],
+      "id": "72978b4b-2de3-4dde-ae66-d82847f189a0",
+      "name": "Append or update row in sheet"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst relatorio = $('Preparar Relatorio Executivo')\n  .first().json;\n\nconst produtos = relatorio.rankingProdutos || [];\n\nreturn produtos.map(p => ({\n  json: {\n    produto: p.produto,\n    quantidade: Number(p.quantidade),\n    pedidos: Number(p.pedidos)\n  }\n}));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        0
+      ],
+      "id": "436eb816-bac7-48b9-b1a8-b187b7260b02",
+      "name": "Preparar Ranking Produtos"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "SEU_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Produtos",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "produto": "={{ $json.produto }}",
+            "quantidade": "={{ $json.quantidade }}",
+            "pedidos": "={{ $json.pedidos }}"
+          },
+          "matchingColumns": [
+            "produto"
+          ],
+          "schema": [
+            {
+              "id": "produto",
+              "displayName": "produto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "quantidade",
+              "displayName": "quantidade",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "pedidos",
+              "displayName": "pedidos",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2224,
+        0
+      ],
+      "id": "ca5fc4a6-bc77-4119-ad92-b4ceb29e97b3",
+      "name": "Append or update row in sheet1"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst relatorio = $('Preparar Relatorio Executivo')\n  .first().json;\n\nconst canais = relatorio.rankingCanais || [];\n\nreturn canais.map(c => ({\n  json: {\n    canal: c.canal,\n    pedidos: Number(c.pedidos),\n    bruto: Number(c.bruto),\n    liquido: Number(c.liquido),\n    taxas: Number(c.taxas),\n    comissao: Number(c.comissao),\n    custoFrete: Number(c.custoFrete),\n    percentualTaxas: Number(c.percentualTaxas),\n    ticketMedio: Number(c.ticketMedio)\n  }\n}));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2432,
+        0
+      ],
+      "id": "a84208ee-b3f5-4103-b639-fe605d80bdd0",
+      "name": "Preparar Indicadores Canais"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "SEU_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Vendas",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "canal": "={{ $json.canal }}",
+            "pedidos": "={{ $json.pedidos }}",
+            "bruto": "={{ $json.bruto }}",
+            "liquido": "={{ $json.liquido }}",
+            "taxas": "={{ $json.taxas }}",
+            "comissao": "={{ $json.comissao }}",
+            "custoFrete": "={{ $json.custoFrete }}",
+            "percentualTaxas": "={{ $json.percentualTaxas }}",
+            "ticketMedio": "={{ $json.ticketMedio }}"
+          },
+          "matchingColumns": [
+            "canal"
+          ],
+          "schema": [
+            {
+              "id": "canal",
+              "displayName": "canal",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "pedidos",
+              "displayName": "pedidos",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "bruto",
+              "displayName": "bruto",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "liquido",
+              "displayName": "liquido",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "taxas",
+              "displayName": "taxas",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "comissao",
+              "displayName": "comissao",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "custoFrete",
+              "displayName": "custoFrete",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "percentualTaxas",
+              "displayName": "percentualTaxas",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ticketMedio",
+              "displayName": "ticketMedio",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2640,
+        0
+      ],
+      "id": "dcfca823-288c-48da-b7e4-fdce551fdbf4",
+      "name": "Salvar Indicadores Canais"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst r = $('Preparar Relatorio Executivo').first().json;\n\nconst moeda = v => Number(v || 0).toLocaleString('pt-BR', {\n  style: 'currency',\n  currency: 'BRL'\n});\n\nconst seguro = v => String(v ?? '')\n  .replace(/&/g, '&amp;')\n  .replace(/</g, '&lt;')\n  .replace(/>/g, '&gt;')\n  .replace(/\"/g, '&quot;');\n\nconst meses = r.historicoMensal || [];\nconst canais = r.rankingCanais || [];\nconst produtos = (r.rankingProdutos || []).slice(0, 30);\nconst projecoes = r.projecoes || [];\n\n// Serialização segura para inserir dados dentro do HTML\nconst dados = JSON.stringify({\n  meses,\n  canais,\n  produtos,\n  projecoes,\n  relatorio: r.relatorioIA || ''\n})\n.replace(/</g, '\\\\u003c')\n.replace(/>/g, '\\\\u003e')\n.replace(/&/g, '\\\\u0026')\n.replace(/\\u2028/g, '\\\\u2028')\n.replace(/\\u2029/g, '\\\\u2029');\n\nconst linhasCanais = canais.map(c => `\n<tr>\n<td>${seguro(c.canal)}</td>\n<td>${moeda(c.bruto)}</td>\n<td>${moeda(c.liquido)}</td>\n<td>${Number(c.percentualTaxas).toFixed(2).replace('.', ',')}%</td>\n</tr>`).join('');\n\nconst linhasProdutos = produtos.map(p => `\n<tr>\n<td>${seguro(p.produto)}</td>\n<td>${Number(p.quantidade)}</td>\n<td>${Number(p.pedidos)}</td>\n</tr>`).join('');\n\nconst linhasProjecoes = projecoes.map(p => `\n<div class=\"previsao\">\n<span>${seguro(p.mes)}</span>\n<strong>${moeda(p.faturamentoPrevisto)}</strong>\n</div>`).join('');\n\nconst html = `<!DOCTYPE html>\n<html lang=\"pt-BR\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n\n<title>Red Geek | Inteligência Comercial</title>\n\n<script src=\"https://cdn.jsdelivr.net/npm/chart.js\"></script>\n<script src=\"https://cdn.jsdelivr.net/npm/marked/marked.min.js\"></script>\n<script src=\"https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js\"></script>\n\n<style>\n* { box-sizing: border-box; }\n\nbody {\n  margin: 0;\n  background: #0b0c10;\n  color: #f4f4f5;\n  font-family: Arial, Helvetica, sans-serif;\n  padding: 25px;\n}\n\nmain {\n  max-width: 1250px;\n  margin: auto;\n}\n\nh1 {\n  color: #ff4048;\n  margin-bottom: 8px;\n  font-size: 32px;\n}\n\nh2 {\n  font-size: 21px;\n  margin-top: 32px;\n  margin-bottom: 16px;\n}\n\n.sub {\n  color: #a1a1aa;\n  margin-bottom: 24px;\n}\n\n.filtros {\n  display: flex;\n  gap: 15px;\n  flex-wrap: wrap;\n  align-items: end;\n  margin-bottom: 24px;\n  padding: 20px;\n  border: 1px solid #303039;\n  border-radius: 14px;\n  background: #17191f;\n}\n\n.filtro {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.filtro label {\n  font-size: 13px;\n  color: #c4c4cc;\n}\n\ninput[type=\"month\"] {\n  padding: 12px;\n  border-radius: 8px;\n  border: 1px solid #44444d;\n  background: #25262e;\n  color: #fff;\n  font-size: 14px;\n  color-scheme: dark;\n}\n\nbutton {\n  padding: 12px 18px;\n  border-radius: 8px;\n  background: #ef4444;\n  color: #fff;\n  border: none;\n  cursor: pointer;\n  font-weight: bold;\n}\n\nbutton:hover { background: #dc2626; }\n\n.cards {\n  display: grid;\n  grid-template-columns: repeat(auto-fit,minmax(210px,1fr));\n  gap: 15px;\n  margin-top: 20px;\n}\n\n.card, .painel {\n  background: #17191f;\n  border: 1px solid #303039;\n  border-radius: 14px;\n  padding: 22px;\n}\n\n.card span {\n  display: block;\n  color: #a1a1aa;\n  font-size: 13px;\n}\n\n.card strong {\n  display: block;\n  font-size: 26px;\n  margin-top: 12px;\n  overflow-wrap: anywhere;\n}\n\n.graficos {\n  display: grid;\n  grid-template-columns: repeat(auto-fit,minmax(320px,1fr));\n  gap: 18px;\n}\n\ncanvas { max-height: 330px; }\n\n.scroll { overflow-x: auto; }\n\ntable {\n  width: 100%;\n  border-collapse: collapse;\n  font-size: 14px;\n}\n\ntd, th {\n  padding: 12px;\n  border-bottom: 1px solid #303039;\n  text-align: left;\n}\n\nth {\n  color: #ff6565;\n  font-weight: 600;\n}\n\n.previsao {\n  display: flex;\n  justify-content: space-between;\n  gap: 12px;\n  padding: 14px 0;\n  border-bottom: 1px solid #303039;\n}\n\n.previsao strong { color: #4ade80; }\n\n.consultor {\n  border-left: 4px solid #ef4444;\n  padding: 26px;\n}\n\n.consultor h1,\n.consultor h2,\n.consultor h3,\n.consultor h4 {\n  color: #ff666b;\n  margin-top: 24px;\n  line-height: 1.35;\n}\n\n.consultor h1 { font-size: 23px; }\n.consultor h2 { font-size: 20px; }\n.consultor h3 { font-size: 17px; }\n\n.consultor p,\n.consultor li {\n  font-size: 14px;\n  line-height: 1.8;\n  color: #e1e1e6;\n}\n\n.consultor strong { color: #fff; }\n\n.consultor ul,\n.consultor ol {\n  padding-left: 22px;\n}\n\n.consultor table {\n  display: block;\n  overflow-x: auto;\n  margin: 18px 0;\n}\n\n.consultor hr {\n  border: none;\n  border-top: 1px solid #38383f;\n  margin: 26px 0;\n}\n\n.consultor blockquote {\n  border-left: 3px solid #ef4444;\n  margin: 18px 0;\n  padding: 8px 18px;\n  background: #22232b;\n}\n\n.consultor pre {\n  white-space: pre-wrap;\n  overflow-wrap: anywhere;\n  font-family: Arial,sans-serif;\n  line-height: 1.7;\n}\n\n.aviso {\n  color: #a1a1aa;\n  font-size: 12px;\n  margin: 10px 0;\n}\n\nfooter {\n  color: #888;\n  margin: 45px 0;\n  text-align: center;\n}\n\n@media(max-width:650px) {\n  body { padding: 14px; }\n  h1 { font-size: 26px; }\n  .card strong { font-size: 22px; }\n  .filtros { align-items: stretch; }\n  .filtro { width: 100%; }\n  input[type=\"month\"] { width: 100%; }\n}\n</style>\n</head>\n\n<body>\n<main>\n\n<h1>RED GEEK 3D STUDIO</h1>\n<p class=\"sub\">\nDashboard de Inteligência Comercial |\n${seguro(r.periodoInicial)} a ${seguro(r.periodoFinal)}\n</p>\n\n<div class=\"filtros\">\n  <div class=\"filtro\">\n    <label for=\"mesInicio\">Mês inicial</label>\n    <input type=\"month\" id=\"mesInicio\"\n      value=\"${seguro(r.periodoInicial)}\">\n  </div>\n\n  <div class=\"filtro\">\n    <label for=\"mesFim\">Mês final</label>\n    <input type=\"month\" id=\"mesFim\"\n      value=\"${seguro(r.periodoFinal)}\">\n  </div>\n\n  <button type=\"button\" id=\"limparFiltro\">\n    Limpar filtros\n  </button>\n</div>\n\n<p class=\"aviso\" id=\"avisoFiltro\"></p>\n\n<section class=\"cards\">\n  <div class=\"card\">\n    <span>Faturamento Bruto</span>\n    <strong id=\"cardBruto\">${moeda(r.faturamentoBruto)}</strong>\n  </div>\n\n  <div class=\"card\">\n    <span>Recebimento Líquido</span>\n    <strong id=\"cardLiquido\">${moeda(r.recebimentoLiquido)}</strong>\n  </div>\n\n  <div class=\"card\">\n    <span>Negócios Ganhos</span>\n    <strong id=\"cardPedidos\">${Number(r.totalNegocios)}</strong>\n  </div>\n\n  <div class=\"card\">\n    <span>Taxas Registradas</span>\n    <strong id=\"cardTaxas\">\n      ${Number(r.percentualTaxas).toFixed(2).replace('.', ',')}%\n    </strong>\n  </div>\n</section>\n\n<h2>Evolução Financeira</h2>\n<div class=\"painel\">\n  <canvas id=\"vendas\"></canvas>\n</div>\n\n<h2>Faturamento por Canal</h2>\n<p class=\"aviso\">\n  Dados acumulados do período completo.\n  Este gráfico não é alterado pelos filtros de mês.\n</p>\n<div class=\"painel\">\n  <canvas id=\"canais\"></canvas>\n</div>\n\n<h2>Desempenho por Canal</h2>\n<div class=\"painel scroll\">\n  <table>\n    <thead>\n      <tr>\n        <th>Canal</th>\n        <th>Bruto</th>\n        <th>Líquido</th>\n        <th>Taxas</th>\n      </tr>\n    </thead>\n    <tbody>${linhasCanais}</tbody>\n  </table>\n</div>\n\n<h2>Produtos Mais Vendidos</h2>\n<p class=\"aviso\">\n  Ranking acumulado dos pedidos validados.\n  Ainda não filtrável por mês.\n</p>\n<div class=\"painel scroll\">\n  <table>\n    <thead>\n      <tr>\n        <th>Produto</th>\n        <th>Unidades</th>\n        <th>Pedidos</th>\n      </tr>\n    </thead>\n    <tbody>${linhasProdutos}</tbody>\n  </table>\n</div>\n\n<h2>Projeções de Faturamento</h2>\n<p class=\"aviso\">\n  Média móvel calculada com os últimos três meses completos.\n  Projeções não são recalculadas pelos filtros.\n</p>\n<div class=\"painel\">\n  ${linhasProjecoes || '<p>Histórico insuficiente.</p>'}\n</div>\n\n<h2>Consultor de Vendas</h2>\n<p class=\"aviso\">\n  Análise estratégica gerada para o período completo\n  de ${seguro(r.periodoInicial)} a ${seguro(r.periodoFinal)}.\n</p>\n\n<div class=\"painel consultor\" id=\"relatorioConsultor\">\n  Carregando análise comercial...\n</div>\n\n<footer>\n  Red Geek 3D Studio • Inteligência Comercial\n</footer>\n\n</main>\n\n<script>\nconst dados = ${dados};\n\nconst formatoBRL = n => Number(n || 0).toLocaleString(\n  'pt-BR',\n  {style:'currency',currency:'BRL'}\n);\n\nconst percentual = n =>\n  Number(n || 0).toFixed(2).replace('.', ',') + '%';\n\nlet graficoVendas = null;\n\nfunction aplicarFiltro() {\n  const inicio = document.getElementById('mesInicio').value;\n  const fim = document.getElementById('mesFim').value;\n  const aviso = document.getElementById('avisoFiltro');\n\n  if (inicio && fim && inicio > fim) {\n    aviso.textContent = 'O mês inicial deve ser anterior ao mês final.';\n    return;\n  }\n\n  const filtrados = dados.meses.filter(m =>\n    (!inicio || m.mes >= inicio) &&\n    (!fim || m.mes <= fim)\n  );\n\n  const somar = campo =>\n    filtrados.reduce((total,m) => total + Number(m[campo] || 0),0);\n\n  const bruto = somar('bruto');\n  const liquido = somar('liquido');\n  const pedidos = somar('pedidos');\n  const taxas = somar('taxas');\n\n  document.getElementById('cardBruto').textContent = formatoBRL(bruto);\n  document.getElementById('cardLiquido').textContent = formatoBRL(liquido);\n  document.getElementById('cardPedidos').textContent = pedidos;\n  document.getElementById('cardTaxas').textContent =\n    percentual(bruto > 0 ? taxas / bruto * 100 : 0);\n\n  aviso.textContent = filtrados.length\n    ? 'Indicadores mensais atualizados para o período selecionado.'\n    : 'Nenhum mês com vendas no período selecionado.';\n\n  if (graficoVendas) {\n    graficoVendas.data.labels = filtrados.map(x => x.mes);\n    graficoVendas.data.datasets[0].data = filtrados.map(x => x.bruto);\n    graficoVendas.data.datasets[1].data = filtrados.map(x => x.liquido);\n    graficoVendas.update();\n  }\n}\n\ndocument.getElementById('mesInicio')\n  .addEventListener('change', aplicarFiltro);\n\ndocument.getElementById('mesFim')\n  .addEventListener('change', aplicarFiltro);\n\ndocument.getElementById('limparFiltro')\n  .addEventListener('click', () => {\n    document.getElementById('mesInicio').value =\n      dados.meses[0]?.mes || '';\n    document.getElementById('mesFim').value =\n      dados.meses[dados.meses.length - 1]?.mes || '';\n    aplicarFiltro();\n  });\n\nif (typeof Chart !== 'undefined') {\n  Chart.defaults.color = '#c5c5ce';\n\n  graficoVendas = new Chart(\n    document.getElementById('vendas'),\n    {\n      type:'line',\n      data:{\n        labels: dados.meses.map(x => x.mes),\n        datasets:[\n          {\n            label:'Faturamento Bruto',\n            data: dados.meses.map(x => x.bruto),\n            borderColor:'#ff4444',\n            tension:0.3\n          },\n          {\n            label:'Recebimento Líquido',\n            data: dados.meses.map(x => x.liquido),\n            borderColor:'#4ade80',\n            tension:0.3\n          }\n        ]\n      },\n      options:{\n        responsive:true,\n        interaction:{mode:'index',intersect:false}\n      }\n    }\n  );\n\n  new Chart(\n    document.getElementById('canais'),\n    {\n      type:'bar',\n      data:{\n        labels:dados.canais.map(x => x.canal),\n        datasets:[{\n          label:'Faturamento Bruto',\n          data:dados.canais.map(x => x.bruto),\n          backgroundColor:'#ef4444'\n        }]\n      },\n      options:{responsive:true}\n    }\n  );\n}\n\nconst elemento = document.getElementById('relatorioConsultor');\n\nif (typeof marked !== 'undefined' &&\n    typeof DOMPurify !== 'undefined') {\n\n  elemento.innerHTML = DOMPurify.sanitize(\n    marked.parse(dados.relatorio)\n  );\n\n} else {\n  elemento.textContent = dados.relatorio;\n}\n\naplicarFiltro();\n</script>\n\n</body>\n</html>`;\n\nreturn [{\n  json: {\n    nomeArquivo: 'red-geek-dashboard.html',\n    html,\n    dataGeracao: r.dataGeracao,\n    status: 'DASHBOARD_GERADO'\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3632,
+        208
+      ],
+      "id": "b8f4e4e2-3513-44ef-add1-86480a306e2c",
+      "name": "Gerar Dashboard HTML"
+    },
+    {
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "html",
+        "options": {
+          "encoding": "utf8",
+          "fileName": "red-geek-dashboard.html"
+        }
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        4032,
+        208
+      ],
+      "id": "123c4114-94d5-42cb-a296-59c17eca449b",
+      "name": "Converter Dashboard em Arquivo"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst r = $('Preparar Relatorio Executivo').first().json;\n\nconst produtos = (r.rankingProdutos || []).slice(0, 50);\nconst canais = r.rankingCanais || [];\nconst meses = r.historicoMensal || [];\nconst auditoria = r.auditoriaProdutos || {};\n\nconst promptConsultor = `\nVocê é um consultor sênior de e-commerce e\ninteligência comercial da Red Geek 3D Studio.\n\nSua missão é ajudar a empresa a decidir\nonde concentrar esforços de vendas.\n\nAnalise os dados reais fornecidos.\n\nClassifique oportunidades em quatro grupos:\n\nINVESTIR:\nProdutos com sinais de demanda recorrente,\ncandidatos a maior esforço comercial.\n\nTESTAR:\nProdutos promissores que precisam de\nvalidação com anúncios, preço ou divulgação.\n\nMANTER:\nProdutos que justificam continuidade,\nsem recomendar expansão imediata.\n\nREDUZIR:\nProdutos cuja prioridade comercial pode\nser reduzida ou que precisam de revisão.\n\nREGRAS IMPORTANTES:\n\n1. Não invente vendas, custos ou margens.\n2. Volume elevado em um pedido isolado\n   não significa demanda recorrente.\n3. Não classifique produtos com poucas vendas\n   como ruins somente pela baixa quantidade.\n4. Considere quantidade E número de pedidos.\n5. Não presuma que itens ausentes do ranking\n   tiveram zero vendas.\n6. Não recomende compras elevadas de estoque\n   sem conhecer o estoque e o custo.\n7. Informe a justificativa e uma ação prática.\n8. Não confunda recebimento líquido com lucro.\n9. A recomendação REDUZIR deve ser cautelosa:\n   prefira reduzir esforço experimental,\n   não descontinuar sem evidências.\n10. As recomendações devem ser preliminares\n    porque faltam custos, estoque e anúncios.\n11. Utilize somente os produtos recebidos.\n12. Diferencie fato, hipótese e recomendação.\n13. Não considere nomes parecidos como\n    o mesmo produto sem evidência confiável.\n\nRetorne SOMENTE JSON válido, sem markdown,\nsem blocos de código e sem comentários.\n\nFORMATO EXATO:\n\n{\n  \"resumo\": \"Diagnóstico estratégico breve\",\n  \"recomendacoes\": [\n    {\n      \"classificacao\": \"INVESTIR\",\n      \"produto\": \"Nome exato do produto\",\n      \"justificativa\": \"Motivo baseado nos dados\",\n      \"acao\": \"Ação comercial sugerida\",\n      \"confianca\": \"ALTA, MEDIA ou BAIXA\"\n    }\n  ],\n  \"alertas\": [\n    \"Alerta comercial ou limitação\"\n  ]\n}\n\nProduza até 12 recomendações no total.\nDistribua entre as quatro classificações\nsomente quando houver evidências.\nNão force itens em todas as categorias.\n\nDADOS:\n\n${JSON.stringify({\n  periodoInicial: r.periodoInicial,\n  periodoFinal: r.periodoFinal,\n  totalNegocios: r.totalNegocios,\n  faturamentoBruto: r.faturamentoBruto,\n  rankingProdutos: produtos,\n  rankingCanais: canais,\n  historicoMensal: meses,\n  auditoriaProdutos: auditoria\n})}\n`;\n\nreturn [{\n  json: {\n    promptConsultor,\n    status: \"CONSULTORIA_PREPARADA\"\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2864,
+        208
+      ],
+      "id": "da2cf25f-447f-42e6-ad8a-d197d1c5c5f9",
+      "name": "Preparar Consultoria Comercial"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-3.1-flash-lite",
+          "mode": "list",
+          "cachedResultName": "models/gemini-3.1-flash-lite"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.promptConsultor }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        3072,
+        208
+      ],
+      "id": "672151c3-121e-4d44-89f9-042a4c8965fa",
+      "name": "Consultor de Vendas IA"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst resposta = $input.first().json;\n\nconst texto = (resposta.content?.parts || [])\n  .map(p => p.text || \"\")\n  .join(\"\\n\")\n  .trim();\n\nif (!texto) {\n  throw new Error(\"Consultor IA não retornou texto.\");\n}\n\n// Remove eventuais cercas Markdown\nconst jsonTexto = texto\n  .replace(/^```(?:json)?\\s*/i, \"\")\n  .replace(/\\s*```$/, \"\")\n  .trim();\n\nlet analise;\n\ntry {\n  analise = JSON.parse(jsonTexto);\n} catch (erro) {\n  throw new Error(\n    \"O Consultor IA não retornou JSON válido: \" +\n    erro.message\n  );\n}\n\n// Lista real de produtos analisados\nconst relatorio = $('Preparar Relatorio Executivo')\n  .first().json;\n\nconst produtosReais = new Map(\n  (relatorio.rankingProdutos || [])\n    .slice(0, 50)\n    .map(p => [p.produto, p])\n);\n\nconst classes = [\n  \"INVESTIR\",\n  \"TESTAR\",\n  \"MANTER\",\n  \"REDUZIR\"\n];\n\nconst confiancas = [\n  \"ALTA\",\n  \"MEDIA\",\n  \"BAIXA\"\n];\n\nconst recomendacoesValidas = [];\nconst recomendacoesRevisao = [];\n\nfor (const item of (analise.recomendacoes || [])) {\n  const produto = String(item.produto || \"\").trim();\n  const classe = String(\n    item.classificacao || \"\"\n  ).toUpperCase();\n\n  const confianca = String(\n    item.confianca || \"BAIXA\"\n  ).toUpperCase();\n\n  if (!classes.includes(classe)) {\n    recomendacoesRevisao.push({\n      produto,\n      motivo: \"Classificação inválida\"\n    });\n    continue;\n  }\n\n  // Evita produtos criados ou agrupados pela IA\n  if (!produtosReais.has(produto)) {\n    recomendacoesRevisao.push({\n      produto,\n      motivo: \"Produto não encontrado no ranking original\"\n    });\n    continue;\n  }\n\n  const dadosProduto = produtosReais.get(produto);\n\n  recomendacoesValidas.push({\n    classificacao: classe,\n    produto,\n    quantidade: dadosProduto.quantidade,\n    pedidos: dadosProduto.pedidos,\n    justificativa: String(item.justificativa || \"\"),\n    acao: String(item.acao || \"\"),\n    confianca: confiancas.includes(confianca)\n      ? confianca\n      : \"BAIXA\"\n  });\n}\n\nconst alertasValidacao = [\n  \"Classificações são sugestões preliminares.\",\n  \"Faltam custos, estoque e desempenho dos anúncios.\",\n  \"Menores taxas não comprovam maior rentabilidade.\",\n  \"Pedidos divergentes não são necessariamente pedidos sem produto.\"\n];\n\nreturn [{\n  json: {\n    status: \"CONSULTORIA_VALIDADA\",\n    resumo: String(analise.resumo || \"\"),\n    recomendacoes: recomendacoesValidas,\n    recomendacoesParaRevisao: recomendacoesRevisao,\n    alertas: alertasValidacao,\n    alertasOriginaisIA: Array.isArray(analise.alertas)\n      ? analise.alertas\n      : [],\n    totalRecomendacoes: recomendacoesValidas.length\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3424,
+        208
+      ],
+      "id": "63c21b8f-b34d-4272-ae6f-a5fa0ea8fe4d",
+      "name": "Validar Consultoria IA"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n/*\n RED GEEK 3D STUDIO\n Cartões do Consultor de Vendas\n Preserva o dashboard HTML existente.\n*/\n\nconst dashboard = $input.first().json;\n\nconst consultoria = $('Validar Consultoria IA')\n  .first().json;\n\nif (!dashboard.html) {\n  throw new Error(\"HTML do dashboard não encontrado.\");\n}\n\nif (consultoria.status !== \"CONSULTORIA_VALIDADA\") {\n  throw new Error(\"Consultoria ainda não validada.\");\n}\n\nfunction escapar(valor) {\n  return String(valor ?? \"\")\n    .replace(/&/g, \"&amp;\")\n    .replace(/</g, \"&lt;\")\n    .replace(/>/g, \"&gt;\")\n    .replace(/\"/g, \"&quot;\")\n    .replace(/'/g, \"&#39;\");\n}\n\nconst grupos = [\n  {\n    id: \"INVESTIR\",\n    titulo: \"INVESTIR\",\n    cor: \"#39c98a\",\n    descricao: \"Priorizar testes de expansão comercial.\"\n  },\n  {\n    id: \"TESTAR\",\n    titulo: \"TESTAR\",\n    cor: \"#60a5fa\",\n    descricao: \"Validar oportunidades antes de ampliar.\"\n  },\n  {\n    id: \"MANTER\",\n    titulo: \"MANTER\",\n    cor: \"#a78bfa\",\n    descricao: \"Acompanhar e preservar a operação.\"\n  },\n  {\n    id: \"REDUZIR\",\n    titulo: \"REDUZIR PRIORIDADE\",\n    cor: \"#f5a742\",\n    descricao: \"Reavaliar esforço, sem descontinuar automaticamente.\"\n  }\n];\n\nconst recomendacoes = consultoria.recomendacoes || [];\n\nconst blocos = grupos.map(grupo => {\n  const itens = recomendacoes.filter(\n    item => item.classificacao === grupo.id\n  );\n\n  if (!itens.length) return \"\";\n\n  const cards = itens.map(item => `\n    <article class=\"rg-acao-card\"\n      style=\"border-top:3px solid ${grupo.cor}\">\n\n      <h4>${escapar(item.produto)}</h4>\n\n      <div class=\"rg-metricas\">\n        <span>${Number(item.quantidade)} unidades</span>\n        <span>${Number(item.pedidos)} pedidos</span>\n        <span>Confiança declarada:\n          ${escapar(item.confianca)}</span>\n      </div>\n\n      <p class=\"rg-justificativa\">\n        ${escapar(item.justificativa)}\n      </p>\n\n      <div class=\"rg-proxima-acao\">\n        <strong>Próxima ação</strong>\n        <p>${escapar(item.acao)}</p>\n      </div>\n    </article>\n  `).join(\"\");\n\n  return `\n    <section class=\"rg-grupo\">\n      <header class=\"rg-grupo-header\">\n        <h3 style=\"color:${grupo.cor}\">\n          ${grupo.titulo}\n          <span class=\"rg-contador\">${itens.length}</span>\n        </h3>\n        <p>${grupo.descricao}</p>\n      </header>\n\n      <div class=\"rg-acao-grid\">${cards}</div>\n    </section>\n  `;\n}).join(\"\");\n\nconst revisoes = consultoria\n  .recomendacoesParaRevisao || [];\n\nconst htmlRevisoes = revisoes.length ? `\n  <div class=\"rg-revisoes\">\n    <strong>\n      ${revisoes.length} recomendação(ões)\n      aguardando revisão\n    </strong>\n    <p>\n      Recomendações sobre produtos não identificados\n      exatamente no ranking foram separadas\n      e não aparecem como ações aprovadas.\n    </p>\n  </div>\n` : \"\";\n\nconst secao = `\n<!-- RED_GEEK_RECOMENDACOES_INICIO -->\n<style>\n.rg-estrategia {\n  margin-top:32px;\n}\n\n.rg-estrategia-sub {\n  color:#a1a1aa;\n  font-size:13px;\n  line-height:1.7;\n}\n\n.rg-grupo {\n  margin:26px 0;\n}\n\n.rg-grupo-header h3 {\n  font-size:19px;\n  margin-bottom:6px;\n}\n\n.rg-grupo-header p {\n  color:#a1a1aa;\n  font-size:13px;\n}\n\n.rg-contador {\n  font-size:12px;\n  background:#292b33;\n  color:white;\n  padding:5px 10px;\n  border-radius:20px;\n  margin-left:8px;\n}\n\n.rg-acao-grid {\n  display:grid;\n  grid-template-columns:\n    repeat(auto-fit,minmax(270px,1fr));\n  gap:16px;\n  margin-top:16px;\n}\n\n.rg-acao-card {\n  background:#191b22;\n  border:1px solid #353741;\n  border-radius:12px;\n  padding:20px;\n}\n\n.rg-acao-card h4 {\n  font-size:16px;\n  margin:0 0 14px;\n  line-height:1.45;\n  color:#fff;\n}\n\n.rg-metricas {\n  display:flex;\n  flex-wrap:wrap;\n  gap:8px;\n  margin-bottom:14px;\n}\n\n.rg-metricas span {\n  background:#2a2d36;\n  color:#c7c9d0;\n  padding:6px 9px;\n  border-radius:6px;\n  font-size:11px;\n}\n\n.rg-justificativa {\n  color:#d0d1d7;\n  font-size:13px;\n  line-height:1.7;\n}\n\n.rg-proxima-acao {\n  background:#242630;\n  padding:14px;\n  border-radius:9px;\n  margin-top:16px;\n}\n\n.rg-proxima-acao strong {\n  color:#ff777b;\n  font-size:12px;\n}\n\n.rg-proxima-acao p {\n  margin:8px 0 0;\n  font-size:13px;\n  line-height:1.6;\n}\n\n.rg-revisoes {\n  padding:18px;\n  border:1px solid #795e38;\n  border-radius:10px;\n  background:#28231c;\n  margin-top:22px;\n}\n\n.rg-revisoes p {\n  font-size:13px;\n  color:#c8bba9;\n}\n\n@media(max-width:650px) {\n  .rg-acao-grid {\n    grid-template-columns:1fr;\n  }\n}\n</style>\n\n<section class=\"rg-estrategia\">\n  <h2>Plano de Ação Comercial</h2>\n\n  <p class=\"rg-estrategia-sub\">\n    Recomendações preliminares do Consultor de Vendas.\n    Baseadas em volume de unidades e frequência\n    de pedidos. Não representam análise de lucro.\n    Os indicadores desta seção consideram\n    todo o período histórico.\n  </p>\n\n  ${blocos}\n\n  ${htmlRevisoes}\n\n  <p class=\"rg-estrategia-sub\">\n    Antes de aumentar investimentos,\n    confirme custos, margens,\n    estoque disponível e desempenho dos anúncios.\n  </p>\n</section>\n<!-- RED_GEEK_RECOMENDACOES_FIM -->\n`;\n\nconst marcador = \"<h2>Consultor de Vendas</h2>\";\n\nif (!dashboard.html.includes(marcador)) {\n  throw new Error(\n    \"Não encontrei a seção Consultor de Vendas no HTML.\"\n  );\n}\n\nconst htmlFinal = dashboard.html.replace(\n  marcador,\n  secao + \"\\n\" + marcador\n);\n\nreturn [{\n  json: {\n    ...dashboard,\n    html: htmlFinal,\n    totalRecomendacoes: recomendacoes.length,\n    recomendacoesParaRevisao: revisoes.length,\n    status: \"DASHBOARD_COM_CONSULTORIA\"\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3840,
+        208
+      ],
+      "id": "2d54461b-fa95-43e0-887a-b826991eaf3c",
+      "name": "Inserir Recomendacoes no Dashboard"
+    },
+    {
+      "parameters": {
+        "sendTo": "seu-email@exemplo.com",
+        "subject": "Red Geek 3D Studio \\| Inteligência Comercial",
+        "message": "= {{ `<div style=\"font-family:Arial,sans-serif;max-width:650px;margin:auto;padding:24px;color:#202027\">   <h2 style=\"color:#e63946\">RED GEEK 3D STUDIO</h2>   <h3>Relatório de Inteligência Comercial</h3>    <p>Seu relatório comercial está pronto!</p>    <p><strong>Faturamento bruto:</strong>   ${Number($('Preparar Relatorio Executivo').first().json.faturamentoBruto).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</p>    <p><strong>Recebimento líquido:</strong>   ${Number($('Preparar Relatorio Executivo').first().json.recebimentoLiquido).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</p>    <p><strong>Negócios analisados:</strong>   ${$('Preparar Relatorio Executivo').first().json.totalNegocios}</p>    <p>O dashboard está anexado ao e-mail.</p>   <p>Baixe o arquivo HTML e abra no navegador para visualizar os gráficos,   filtros e recomendações do Consultor de Vendas.</p>    <hr>   <small>Red Geek 3D Studio | Inteligência Comercial</small> </div>` }}",
+        "options": {
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {}
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        4240,
+        208
+      ],
+      "id": "2440abb5-cee9-4290-b4fe-3478af5158dc",
+      "name": "Enviar Dashboard por Email",
+      "webhookId": "57a349d7-8f52-43ed-81e3-c7c5ae0aaae1"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "d02d950c-ca52-41b0-8d22-5deb2ad53edd",
+      "name": "Schedule Trigger"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Consultar Campos Comerciais": {
+      "main": [
+        [
+          {
+            "node": "Consultar Vendas Ploomes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar Vendas Ploomes": {
+      "main": [
+        [
+          {
+            "node": "Calcular Indicadores Comerciais",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcular Indicadores Comerciais": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Preparar Relatorio Executivo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Relatorio Executivo": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Preparar Indicadores Mensais",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Indicadores Mensais": {
+      "main": [
+        [
+          {
+            "node": "Append or update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append or update row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Preparar Ranking Produtos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Ranking Produtos": {
+      "main": [
+        [
+          {
+            "node": "Append or update row in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append or update row in sheet1": {
+      "main": [
+        [
+          {
+            "node": "Preparar Indicadores Canais",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Indicadores Canais": {
+      "main": [
+        [
+          {
+            "node": "Salvar Indicadores Canais",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salvar Indicadores Canais": {
+      "main": [
+        [
+          {
+            "node": "Preparar Consultoria Comercial",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gerar Dashboard HTML": {
+      "main": [
+        [
+          {
+            "node": "Inserir Recomendacoes no Dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Consultoria Comercial": {
+      "main": [
+        [
+          {
+            "node": "Consultor de Vendas IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultor de Vendas IA": {
+      "main": [
+        [
+          {
+            "node": "Validar Consultoria IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Consultoria IA": {
+      "main": [
+        [
+          {
+            "node": "Gerar Dashboard HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Inserir Recomendacoes no Dashboard": {
+      "main": [
+        [
+          {
+            "node": "Converter Dashboard em Arquivo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Converter Dashboard em Arquivo": {
+      "main": [
+        [
+          {
+            "node": "Enviar Dashboard por Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Consultar Campos Comerciais",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": []
+}

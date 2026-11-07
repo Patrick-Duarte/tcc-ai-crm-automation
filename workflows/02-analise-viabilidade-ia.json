@@ -1,0 +1,399 @@
+{
+  "name": "Red Geek | Análise de IA do Orçamento",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://public-api2.ploomes.com/Deals",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "$filter",
+              "value": "=PipelineId eq 1000001 and StatusId eq 1"
+            },
+            {
+              "name": "$select",
+              "value": "Id,Title,ContactId,PipelineId,StageId,StatusId,OwnerId"
+            },
+            {
+              "name": "$expand",
+              "value": "OtherProperties"
+            },
+            {
+              "name": "$top",
+              "value": "100"
+            },
+            {
+              "name": "$orderby",
+              "value": "Id desc"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": []
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        208,
+        0
+      ],
+      "id": "b230c1d0-d61e-4b40-96d8-bb2d32a71b99",
+      "name": "Consultar Orcamento Ploomes"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst fieldKey = \"deal_00000000-0000-0000-0000-000000000001\";\n\nconst entradas = $input.all();\n\nconst negocios = entradas.flatMap(item => {\n  const dados = item.json;\n\n  if (Array.isArray(dados)) {\n    return dados.flatMap(x => x.value || []);\n  }\n\n  if (Array.isArray(dados.value)) {\n    return dados.value;\n  }\n\n  return dados.Id ? [dados] : [];\n});\n\nconst resultado = [];\n\nfor (const negocio of negocios) {\n  const campo = (negocio.OtherProperties || [])\n    .find(prop => prop.FieldKey === fieldKey);\n\n  const solicitacao = String(\n    campo?.BigStringValue ??\n    campo?.StringValue ??\n    \"\"\n  ).trim();\n\n  // Ignorar pedidos sem solicitação\n  if (!solicitacao) continue;\n\n  resultado.push({\n    json: {\n      negocioId: negocio.Id,\n      titulo: negocio.Title,\n      etapaId: negocio.StageId,\n      solicitacao,\n      tamanhoSolicitacao: solicitacao.length\n    }\n  });\n}\n\nreturn resultado;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "f8050179-c039-4001-8c81-c53d586cff42",
+      "name": "Preparar Dados IA"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-3.1-flash-lite",
+          "mode": "list",
+          "cachedResultName": "models/gemini-3.1-flash-lite"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.promptAnalise }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1408,
+        64
+      ],
+      "id": "cd4ad983-0e31-405d-a8e1-2cd39aa687d6",
+      "name": "Message a model"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ 'https://public-api2.ploomes.com/Deals(' + $('Montar Prompt IA').first().json.negocioId + ')' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=\n{{ JSON.stringify({\n  OtherProperties: [\n    {\n      FieldKey: \"deal_00000000-0000-0000-0000-000000000002\",\n      BigStringValue: $json.content.parts[0].text\n    }\n  ]\n}) }}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1744,
+        64
+      ],
+      "id": "34a0e8a9-f980-4b8f-99e7-d248e826b800",
+      "name": "Gravar Analise IA Ploomes"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "3e5ea709-454e-452c-bb06-2bf808628c4f",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "SEU_DATA_TABLE_ID",
+          "mode": "id"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": []
+        },
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        640,
+        -160
+      ],
+      "id": "f2fccdb8-0d8b-4aa8-9fb2-def53b6474d0",
+      "name": "Get row(s)",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst pedidos = $('Preparar Dados IA').all()\n  .map(item => item.json);\n\nconst registros = $input.all()\n  .map(item => item.json)\n  .filter(item => item.negocioId != null);\n\nconst historico = new Map(\n  registros.map(item => [\n    String(item.negocioId),\n    item.solicitacaoAnterior || \"\"\n  ])\n);\n\nconst resultado = [];\n\nfor (const pedido of pedidos) {\n  const id = String(pedido.negocioId);\n  const anterior = historico.get(id);\n\n  let situacao;\n\n  if (anterior === undefined) {\n    situacao = \"NOVO\";\n  } else if (anterior !== pedido.solicitacao) {\n    situacao = \"ALTERADO\";\n  } else {\n    situacao = \"SEM ALTERACAO\";\n  }\n\n  if (situacao === \"SEM ALTERACAO\") {\n    continue;\n  }\n\n  resultado.push({\n    json: {\n      ...pedido,\n      situacao,\n      precisaAnalise: true\n    }\n  });\n}\n\nreturn resultado;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        848,
+        -160
+      ],
+      "id": "02b5dc49-41a9-4295-a7aa-ea31695808cf",
+      "name": "Comparar Solicitacoes"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "0f90ea32-cee2-4f34-972b-37d862b0a296",
+              "leftValue": "={{ $json.precisaAnalise }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1056,
+        -160
+      ],
+      "id": "7cbe3a66-90da-41d2-a79f-5c53757a6bb6",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst entradas = $input.all().map(item => item.json);\nconst dadosAtuais = entradas[0] ?? {};\n\nconst promptAnalise = `\nVocê é um analista sênior de viabilidade comercial,\nfinanceira e operacional da Red Geek 3D Studio,\nempresa de impressão 3D e comercialização de produtos.\n\nSua missão é analisar criticamente a solicitação de demanda\ndo Ploomes, considerando os dados do negócio e eventuais\ncomparações com outros pedidos.\n\nDADOS RECEBIDOS:\n${JSON.stringify(entradas, null, 2).slice(0, 60000)}\n\nREGRAS OBRIGATÓRIAS:\n\n1. Utilize somente informações efetivamente fornecidas.\n2. Nunca invente custos, valores, prazos ou capacidade.\n3. Diferencie fatos comprovados de estimativas e riscos.\n4. Não confunda orçamento com pedido aprovado.\n5. Analise a Solicitação da demanda integralmente,\n   incluindo observações, produção e custos.\n6. Valide a coerência dos totais financeiros.\n7. Calcule a margem sobre o valor líquido, quando possível:\n   lucro / valor líquido * 100.\n8. Não desconte taxas ou custos duas vezes.\n9. Considere horas de impressão como horas-máquina.\n10. Para verificar capacidade, considere outros pedidos\n    e impressoras disponíveis somente quando houver dados.\n11. Se houver contradições, destaque-as.\n12. Não trate ausência de informação como ausência de risco.\n13. Ofereça recomendações práticas e objetivas.\n\nREGRAS DE PRECISÃO E CONTROLE DE QUALIDADE:\n\n- A data de entrega deve ser reproduzida exatamente como está\n  em \"Entrega prevista\" na Solicitação da demanda.\n  Nunca altere, estime ou substitua essa data.\n\n- Antes de escrever o relatório, confira internamente:\n  quantidade, datas, pesos, horas, custos, taxas e lucro.\n\n- Não afirme que o prazo é confortável ou viável sem conhecer\n  a capacidade disponível e os outros pedidos em andamento.\n\n- Não deduza densidade, robustez, dificuldade de impressão\n  ou risco específico de empenamento apenas pelo peso da peça.\n\n- Não classifique um cliente como fraudulento apenas pelo\n  nome ou formato do e-mail. Quando houver dúvida cadastral,\n  recomende conferência administrativa, sem acusação.\n\n- Compare o peso unitário multiplicado pela quantidade com\n  o peso total informado. Se existir diferença, indique seu\n  valor e solicite esclarecimento sobre desperdício, suportes\n  ou outros materiais, sem assumir a causa.\n\n- Diferencie dados comprovados, estimativas do orçamento\n  e hipóteses que precisam ser validadas.\n\n- Se houver qualquer dado contraditório, sinalize-o sem\n  modificar o valor original.\n\n- Na conclusão, priorize riscos financeiros, técnicos e\n  operacionais que realmente afetam a decisão do negócio.\n\n\nESTRUTURA OBRIGATÓRIA DO RELATÓRIO:\n\n1. RESUMO EXECUTIVO\nExplique o produto, quantidade, cliente, valor e prazo.\nIndique o cenário geral da solicitação.\n\n2. VANTAGENS DO NEGÓCIO\nIdentifique fatores positivos financeiros, comerciais,\noperacionais e oportunidades de relacionamento com o cliente.\nInclua somente vantagens justificadas pelos dados.\n\n3. DESVANTAGENS DO NEGÓCIO\nIdentifique limitações econômicas, dificuldades técnicas,\ndependências e possíveis impactos negativos.\n\n4. ANÁLISE FINANCEIRA\nApresente, quando disponíveis:\n- Valor bruto\n- Taxas\n- Valor líquido\n- Custo de produção\n- Lucro estimado\n- Margem estimada\n- Inconsistências de valores\n\nExplique se a operação parece atrativa e por quê.\n\n5. ANÁLISE DE PRODUÇÃO\nAvalie:\n- Horas totais de impressão\n- Consumo de filamento\n- Complexidade e personalização\n- Desperdício e possíveis falhas\n- Dependência de arquivos ou aprovação\n- Capacidade produtiva, se informada\n\n6. PRAZOS E ENTREGAS\nCompare a data de entrega com as horas de produção.\nConsidere outros compromissos somente se informados.\nDestaque riscos de atraso e prioridades.\n\n7. PONTOS DE ATENÇÃO\nListe os riscos mais relevantes, indicando:\n- Criticidade: Alta, Média ou Baixa\n- Motivo\n- Possível impacto\n- Ação preventiva recomendada\n\n8. DADOS FALTANTES OU INCONSISTENTES\nIndique informações que precisam ser confirmadas\nantes de aprovar ou produzir o pedido.\n\n9. RECOMENDAÇÕES PRÁTICAS\nApresente ações concretas em ordem de prioridade,\nvoltadas ao vendedor e à equipe de produção.\n\n10. PARECER FINAL\nClassifique como:\n- FAVORÁVEL\n- FAVORÁVEL COM RESSALVAS\n- NÃO RECOMENDADO\n- DADOS INSUFICIENTES\n\nJustifique a classificação com base nas evidências.\n\nFINALIZE COM:\nUma conclusão executiva de até três frases,\ndestacando a decisão mais importante.\n\nFORMATAÇÃO:\nEscreva em português brasileiro.\nSeja profissional, criterioso e objetivo.\nUse títulos claros e valores em reais.\nEvite elogios genéricos e repetições.\n`;\n\nreturn [{\n  json: {\n    ...dadosAtuais,\n    promptAnalise\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1264,
+        -256
+      ],
+      "id": "b6dce8b0-49a8-4a8e-b2a1-4b13262d9543",
+      "name": "Montar Prompt IA"
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "SEU_DATA_TABLE_ID",
+          "mode": "id"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "negocioId",
+              "keyValue": "={{ $('Montar Prompt IA').first().json.negocioId }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "negocioId": "={{ $('Montar Prompt IA').first().json.negocioId }}",
+            "solicitacaoAnterior": "={{ $('Montar Prompt IA').first().json.solicitacao }}",
+            "dataAnalise": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "negocioId",
+              "displayName": "negocioId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "solicitacaoAnterior",
+              "displayName": "solicitacaoAnterior",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "dataAnalise",
+              "displayName": "dataAnalise",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1952,
+        64
+      ],
+      "id": "a8d164c2-4dae-4ac8-8690-ca781701f2c5",
+      "name": "Registrar Analise Concluida"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Consultar Orcamento Ploomes": {
+      "main": [
+        [
+          {
+            "node": "Preparar Dados IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Dados IA": {
+      "main": [
+        [
+          {
+            "node": "Get row(s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Gravar Analise IA Ploomes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Consultar Orcamento Ploomes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s)": {
+      "main": [
+        [
+          {
+            "node": "Comparar Solicitacoes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Comparar Solicitacoes": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Montar Prompt IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar Prompt IA": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gravar Analise IA Ploomes": {
+      "main": [
+        [
+          {
+            "node": "Registrar Analise Concluida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": []
+}
