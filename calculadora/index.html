@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>Calculadora de Preço 3D | Red Geek</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@1,700;1,800;1,900&family=Barlow:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+<style>
+:root{
+  --red:#E20011; --red-dark:#B3000D; --ink:#111214; --ink-2:#2a2c30; --muted:#5f636b; --line:#e3e4e7;
+  --paper:#fff; --bg:#f3f3f5; --soft:#f6f6f7; --ok:#1f7a45; --warn:#a2591a;
+  --c-fil:#E20011; --c-maq:#111214; --c-falha:#f08a92; --c-extra:#9aa0a8; --c-taxa:#d9b36c; --c-lucro:#1f7a45;
+  --f-display:"Barlow Condensed","Arial Narrow",Impact,sans-serif; --f-body:"Barlow","Segoe UI",Roboto,Arial,sans-serif;
+  --r:10px; color-scheme:light;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body);padding-inline:16px}
+html.rg-embed body{background:transparent;padding-inline:0}
+html.rg-embed body > header{display:none}
+header.tool-head{max-width:1280px;margin:0 auto;padding-block:22px 14px;display:flex;flex-wrap:wrap;gap:6px 24px;align-items:flex-end;justify-content:space-between}
+h1{font:italic 900 clamp(30px,4.2vw,46px)/.95 var(--f-display);text-transform:uppercase;margin:0;letter-spacing:-.01em}
+h1 span{color:var(--red)}
+.tag{color:var(--ink-2);margin:0;max-width:62ch}
+main{max-width:1280px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,440px);gap:16px;padding-bottom:28px;align-items:start}
+@media (max-width:900px){main{grid-template-columns:minmax(0,1fr)}}
+.panel,.result{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);min-width:0}
+.result{position:sticky;top:12px}
+@media (max-width:900px){.result{position:static}}
+section.step{padding:14px 16px;border-top:1px solid var(--line)}
+section.step:first-child{border-top:0}
+.step h2{font:italic 800 18px/1 var(--f-display);text-transform:uppercase;margin:0 0 12px;display:flex;gap:8px;align-items:center;letter-spacing:.02em}
+.step h2 b{font:700 12px/1 var(--f-body);font-style:normal;color:#fff;background:var(--red);border-radius:99px;width:22px;height:22px;display:inline-grid;place-items:center}
+.step h2 small{margin-left:auto;font:500 12.5px var(--f-body);font-style:normal;text-transform:none;color:var(--muted);letter-spacing:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px 14px}
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f label{font-weight:600;font-size:13.5px;line-height:1.25}
+.f .in{display:flex;align-items:center;border:1px solid #d5d7db;border-radius:8px;background:#fff;overflow:hidden;transition:border-color .15s,box-shadow .15s}
+.f .in:focus-within{border-color:var(--red);box-shadow:0 0 0 3px rgba(226,0,17,.12)}
+.f .in span{padding:0 9px;color:var(--muted);font-size:13px;white-space:nowrap;background:var(--soft);align-self:stretch;display:grid;place-items:center}
+.f input,.f select{border:0;outline:0;min-width:0;width:100%;padding:9px 10px;font:600 15px var(--f-body);font-variant-numeric:tabular-nums;color:var(--ink);background:transparent}
+.f select{cursor:pointer}
+.f .h{font-size:12px;color:var(--muted);line-height:1.35}
+.time{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:-2px 0 12px}
+.chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 11px;font:600 12.5px var(--f-body);cursor:pointer;color:var(--ink-2)}
+.chip:hover{border-color:var(--red);color:var(--red)}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{flex:1;border:0;background:#fff;padding:8px 10px;font:600 13px var(--f-body);cursor:pointer;color:var(--ink)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--red);color:#fff}
+.check{display:flex;gap:8px;align-items:center;font-weight:600;font-size:14px}
+.check input{accent-color:var(--red);width:17px;height:17px}
+details summary{cursor:pointer;font-weight:700;color:var(--muted);font-size:13.5px}
+details[open] summary{margin-bottom:10px}
+.faixas{width:100%;border-collapse:collapse;font-size:13px}
+.faixas td{padding:4px 6px;border-bottom:1px solid var(--line)}
+.faixas input{width:70px;border:1px solid #d5d7db;border-radius:6px;padding:4px 6px;font:600 13px var(--f-body);text-align:right}
+.faixas tr.on td{background:#fff1f2}
+.r-top{padding:18px 20px 14px;border-bottom:1px solid var(--line);border-top:4px solid var(--red);border-radius:var(--r) var(--r) 0 0}
+.r-top .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
+.price{font:italic 900 clamp(46px,6vw,62px)/1 var(--f-display);color:var(--red);margin:4px 0 2px;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.r-sub{display:flex;flex-wrap:wrap;gap:4px 16px;color:var(--ink-2);font-size:14px}
+.r-sub b{font-variant-numeric:tabular-nums}
+.bar{display:flex;height:14px;border-radius:99px;overflow:hidden;margin:14px 20px 6px;background:var(--soft)}
+.bar i{display:block;height:100%;transition:width .25s}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;padding:0 20px 12px;font-size:12px;color:var(--muted)}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px;background:var(--c)}
+table.br{width:100%;border-collapse:collapse;font-size:14px}
+table.br td{padding:7px 20px;border-top:1px solid var(--line)}
+table.br td:last-child{text-align:right;font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
+table.br tr.sum td{font-weight:800;background:var(--soft)}
+table.br tr.prof td{color:var(--ok);font-weight:800}
+table.br .d{display:block;font-size:12px;color:var(--muted);font-weight:500}
+.r-act{padding:14px 20px 18px;display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line)}
+.btn{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:999px;padding:10px 16px;font:700 14px var(--f-body);cursor:pointer;text-align:center}
+.btn:hover{border-color:var(--red)}
+.btn.primary{background:var(--red);border-color:var(--red);color:#fff;text-transform:uppercase;letter-spacing:.02em;padding:13px 16px}
+.btn.primary:hover{background:var(--red-dark)}
+.btn:disabled{opacity:.7;cursor:default}
+.btn.wa{background:#1f7a45;border-color:#1f7a45;color:#fff}
+.btn.wa:hover{background:#17613a}
+.btn:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+#msg{margin:0;font-size:13px;color:var(--muted);min-height:1.4em}
+#msg.ok{color:var(--ok)} #msg.warn{color:var(--warn)} #msg a{color:var(--red);font-weight:700}
+.rg-lock{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--muted);margin:0}
+.rg-lock svg{flex:none;margin-top:1px}
+.hm{margin:0 20px 14px;padding:10px 12px;background:var(--soft);border-radius:8px;font-size:13px;color:var(--ink-2)}
+.hm b{font-variant-numeric:tabular-nums}
+footer.tool-foot{max-width:1280px;margin:0 auto;padding-bottom:28px;color:var(--muted);font-size:13px}
+#quote{display:none}
+@media print{
+  @page{size:A4;margin:16mm}
+  body{background:#fff!important;padding:0}
+  body > *:not(#quote){display:none!important}
+  #quote{display:block;color:#111214;font:12pt/1.5 var(--f-body)}
+  #quote .qh{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #E20011;padding-bottom:10px;margin-bottom:18px}
+  #quote h3{font:italic 900 26pt/1 var(--f-display);text-transform:uppercase;margin:0}
+  #quote .qn{font:italic 800 15pt var(--f-display);text-transform:uppercase}
+  #quote table{width:100%;border-collapse:collapse;margin:14px 0}
+  #quote th,#quote td{border-bottom:1px solid #ddd;padding:8px 6px;text-align:left}
+  #quote th{font-size:9pt;text-transform:uppercase;letter-spacing:.06em;color:#5f636b}
+  #quote td.n,#quote th.n{text-align:right}
+  #quote .tot{font:italic 900 22pt var(--f-display);color:#E20011;text-align:right}
+  #quote .obs{font-size:10pt;color:#444;margin-top:16px}
+  #quote .ft{margin-top:30px;font-size:8.5pt;color:#888;border-top:1px solid #eee;padding-top:8px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header class="tool-head">
+  <h1>Calculadora de preço <span>3D</span></h1>
+  <p class="tag">Descubra o preço certo da sua peça impressa: filamento, hora-máquina, energia, falhas, embalagem, taxa do canal e margem.</p>
+</header>
+
+<main>
+  <form class="panel" id="form" aria-label="Dados do cálculo" onsubmit="return false">
+    <section class="step">
+      <h2><b>1</b>A peça</h2>
+      <div class="grid">
+        <div class="f"><label for="peso">Peso da peça</label><div class="in"><input id="peso" type="number" min="0" step="1" inputmode="decimal"><span>g</span></div><span class="h">O fatiador mostra o peso.</span></div>
+        <div class="f"><label for="th">Tempo de impressão</label><div class="time"><div class="in"><input id="th" type="number" min="0" step="1" inputmode="numeric" aria-label="Horas"><span>h</span></div><div class="in"><input id="tm" type="number" min="0" max="59" step="1" inputmode="numeric" aria-label="Minutos"><span>min</span></div></div></div>
+        <div class="f"><label for="qtd">Quantidade</label><div class="in"><input id="qtd" type="number" min="1" step="1" inputmode="numeric"><span>un.</span></div></div>
+      </div>
+    </section>
+
+    <section class="step">
+      <h2><b>2</b>Filamento</h2>
+      <div class="chips" id="filChips" aria-label="Preço típico do filamento">
+        <button type="button" class="chip" data-v="95">PLA</button><button type="button" class="chip" data-v="110">PETG</button>
+        <button type="button" class="chip" data-v="120">PLA Silk</button><button type="button" class="chip" data-v="115">ABS/ASA</button><button type="button" class="chip" data-v="160">TPU</button>
+      </div>
+      <div class="grid">
+        <div class="f"><label for="pkg">Preço do rolo (1 kg)</label><div class="in"><span>R$</span><input id="pkg" type="number" min="0" step="0.01" inputmode="decimal"></div><span class="h">Valores dos botões são só referência. Use o que você pagou.</span></div>
+        <div class="f"><label for="desp">Desperdício (purga, suporte, sobras)</label><div class="in"><input id="desp" type="number" min="0" step="1" inputmode="decimal"><span>%</span></div></div>
+      </div>
+    </section>
+
+    <section class="step">
+      <h2><b>3</b>Impressora e energia<small id="hmLabel"></small></h2>
+      <div class="chips" id="impChips" aria-label="Modelos de referência">
+        <button type="button" class="chip" data-p="2800" data-w="95">Bambu A1</button><button type="button" class="chip" data-p="1900" data-w="80">A1 mini</button>
+        <button type="button" class="chip" data-p="6500" data-w="200">P1S</button><button type="button" class="chip" data-p="9500" data-w="250">X1C</button><button type="button" class="chip" data-p="1600" data-w="200">Ender 3</button>
+      </div>
+      <div class="grid">
+        <div class="f"><label for="pimp">Valor da impressora</label><div class="in"><span>R$</span><input id="pimp" type="number" min="0" step="1" inputmode="decimal"></div></div>
+        <div class="f"><label for="vida">Vida útil esperada</label><div class="in"><input id="vida" type="number" min="1" step="100" inputmode="numeric"><span>horas</span></div><span class="h">Em quantas horas de uso ela se paga.</span></div>
+        <div class="f"><label for="watt">Consumo médio</label><div class="in"><input id="watt" type="number" min="0" step="5" inputmode="numeric"><span>W</span></div></div>
+        <div class="f"><label for="kwh">Tarifa de energia</label><div class="in"><span>R$</span><input id="kwh" type="number" min="0" step="0.01" inputmode="decimal"><span>/kWh</span></div><span class="h">Está na sua conta de luz, com impostos.</span></div>
+        <div class="f"><label for="manut">Manutenção</label><div class="in"><span>R$</span><input id="manut" type="number" min="0" step="0.05" inputmode="decimal"><span>/h</span></div><span class="h">Bicos, correias, placa, peças.</span></div>
+      </div>
+    </section>
+
+    <section class="step">
+      <h2><b>4</b>Custos do negócio</h2>
+      <div class="grid">
+        <div class="f"><label for="fixo">Custo fixo mensal</label><div class="in"><span>R$</span><input id="fixo" type="number" min="0" step="10" inputmode="decimal"></div><span class="h">Internet, software, aluguel do espaço, MEI.</span></div>
+        <div class="f"><label for="hmes">Horas de impressão por mês</label><div class="in"><input id="hmes" type="number" min="1" step="10" inputmode="numeric"><span>h</span></div><span class="h">Somando todas as impressoras.</span></div>
+        <div class="f"><label for="falha">Reserva para falhas</label><div class="in"><input id="falha" type="number" min="0" step="1" inputmode="decimal"><span>%</span></div><span class="h">Sobre filamento + máquina.</span></div>
+        <div class="f"><label for="mmin">Seu trabalho (pós-processo)</label><div class="in"><input id="mmin" type="number" min="0" step="1" inputmode="numeric"><span>min</span></div></div>
+        <div class="f"><label for="mval">Valor da sua hora</label><div class="in"><span>R$</span><input id="mval" type="number" min="0" step="1" inputmode="decimal"><span>/h</span></div></div>
+        <div class="f"><label for="emb">Embalagem e extras</label><div class="in"><span>R$</span><input id="emb" type="number" min="0" step="0.5" inputmode="decimal"></div><span class="h">Por unidade: caixa, ímã, argola, tinta.</span></div>
+      </div>
+    </section>
+
+    <section class="step">
+      <h2><b>5</b>Venda</h2>
+      <div class="grid" style="margin-bottom:12px">
+        <div class="f" style="grid-column:1/-1"><label>Margem de lucro</label>
+          <div class="seg" id="mmode" role="group" aria-label="Tipo de margem"><button type="button" data-v="auto" aria-pressed="true">Automática por faixa</button><button type="button" data-v="fixa" aria-pressed="false">Definir eu mesmo</button></div>
+          <span class="h" id="mhint">Peças baratas levam margem maior; peças caras, menor. Ajuste as faixas abaixo.</span></div>
+        <div class="f" id="mfixaBox" hidden><label for="mfixa">Margem sobre o custo</label><div class="in"><input id="mfixa" type="number" min="0" step="5" inputmode="decimal"><span>%</span></div></div>
+        <div class="f"><label for="tpct">Taxa do canal</label><div class="in"><input id="tpct" type="number" min="0" max="90" step="0.5" inputmode="decimal"><span>%</span></div><span class="h">Venda direta: 0. Marketplace: veja a taxa atual dele.</span></div>
+        <div class="f"><label for="tfix">Tarifa fixa por venda</label><div class="in"><span>R$</span><input id="tfix" type="number" min="0" step="0.5" inputmode="decimal"></div></div>
+      </div>
+      <details id="faixasBox">
+        <summary>Faixas da margem automática</summary>
+        <table class="faixas" id="faixas"><tbody></tbody></table>
+      </details>
+      <label class="check" style="margin-top:12px"><input type="checkbox" id="arred"> Arredondar para terminar em ,90</label>
+    </section>
+
+    <section class="step" id="cliStep">
+      <h2><b>6</b>Cliente e pedido<small>vai para os PDFs</small></h2>
+      <div class="grid">
+        <div class="f"><label for="cTipo">Tipo de cliente</label><div class="in"><select id="cTipo"><option>Pessoa Física</option><option>Empresa</option></select></div></div>
+        <div class="f"><label for="cNome" id="cNomeLbl">Nome do cliente</label><div class="in"><input id="cNome" maxlength="120" autocomplete="name"></div></div>
+        <div class="f" id="cCnpjBox" hidden><label for="cCnpj">CNPJ</label><div class="in"><input id="cCnpj" maxlength="18" inputmode="numeric" placeholder="00.000.000/0000-00"></div></div>
+        <div class="f" id="cRespBox" hidden><label for="cResp">Contato responsável</label><div class="in"><input id="cResp" maxlength="120"></div></div>
+        <div class="f"><label for="cEmail">E-mail</label><div class="in"><input id="cEmail" type="email" maxlength="120" autocomplete="email"></div></div>
+        <div class="f"><label for="cZap">WhatsApp</label><div class="in"><input id="cZap" type="tel" maxlength="20" inputmode="tel" placeholder="(19) 99999-9999"></div></div>
+        <div class="f"><label for="cCanal">Canal de venda</label><div class="in"><select id="cCanal"><option>WhatsApp</option><option>Instagram</option><option>Shopee</option><option>Loja</option><option>Outro</option></select></div></div>
+        <div class="f"><label for="cProd">Produto</label><div class="in"><input id="cProd" maxlength="120" placeholder="Ex.: chaveiro personalizado"></div></div>
+        <div class="f"><label for="cPrazo">Prazo desejado</label><div class="in"><input id="cPrazo" type="date"></div></div>
+        <div class="f"><label for="cLink">Link do arquivo (STL/3MF)</label><div class="in"><input id="cLink" type="url" maxlength="300"></div></div>
+        <div class="f" style="grid-column:1/-1"><label for="cObs">Personalização / observações</label><div class="in"><input id="cObs" maxlength="300"></div></div>
+      </div>
+    </section>
+
+    <section class="step">
+      <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center">
+        <span class="h" style="font-size:12.5px;color:var(--muted)">Os valores de custo ficam salvos neste navegador. Os dados do cliente, não.</span>
+        <button type="button" class="btn" id="reset" style="padding:7px 14px;font-size:13px">Voltar aos valores de exemplo</button>
+      </div>
+    </section>
+  </form>
+
+  <aside class="result" aria-live="polite" aria-label="Resultado">
+    <div class="r-top">
+      <div class="lbl">Preço sugerido por unidade</div>
+      <div class="price" id="pUn">R$ 0,00</div>
+      <div class="r-sub"><span>Total (<b id="qLbl">1</b> un.): <b id="pTot">R$ 0,00</b></span><span>Lucro por un.: <b id="lUn" style="color:var(--ok)">R$ 0,00</b></span></div>
+    </div>
+    <div class="bar" id="bar" role="img" aria-label="Composição do preço"></div>
+    <div class="legend">
+      <span style="--c:var(--c-fil)">Filamento</span><span style="--c:var(--c-maq)">Máquina</span><span style="--c:var(--c-falha)">Falhas</span>
+      <span style="--c:var(--c-extra)">Trabalho e extras</span><span style="--c:var(--c-taxa)">Taxas</span><span style="--c:var(--c-lucro)">Lucro</span>
+    </div>
+    <p class="hm" id="hmBox"></p>
+    <table class="br"><tbody id="brBody"></tbody></table>
+    <div class="r-act">
+      <button type="button" class="btn primary" id="pdf">PDF do cliente / WhatsApp</button>
+      <button type="button" class="btn" id="ficha">Ficha do pedido (PDF interno)</button>
+      <button type="button" class="btn" id="copy">Copiar preço</button>
+      <p id="msg"></p>
+      <p class="rg-lock" id="rgLock" hidden><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg><span>A calculadora é livre. Para gerar o orçamento em PDF, basta ter uma conta grátis na Red Geek.</span></p>
+    </div>
+  </aside>
+</main>
+<footer class="tool-foot">Os valores são uma estimativa a partir dos dados que você informou. Confira as taxas do seu canal de venda e os impostos do seu regime.</footer>
+
+<dialog id="qDlg" style="border:0;border-radius:14px;padding:0;max-width:440px;width:calc(100% - 32px);box-shadow:0 20px 60px rgba(0,0,0,.3)">
+  <form method="dialog" style="padding:22px 22px 18px;border-top:5px solid var(--red);display:flex;flex-direction:column;gap:12px">
+    <h2 style="font:italic 900 26px/1 var(--f-display);text-transform:uppercase;margin:0">Dados do orçamento</h2>
+    <div class="f"><label for="qEmp">Seu nome ou da sua loja</label><div class="in"><input id="qEmp" maxlength="80"></div></div>
+    <div class="f"><label for="qCli">Cliente</label><div class="in"><input id="qCli" maxlength="80"></div></div>
+    <div class="f"><label for="qDesc">Descrição da peça</label><div class="in"><input id="qDesc" maxlength="120" placeholder="Ex.: chaveiro personalizado em PLA"></div></div>
+    <div class="f"><label for="qZap">WhatsApp do cliente</label><div class="in"><input id="qZap" type="tel" maxlength="20" inputmode="tel" placeholder="(19) 99999-9999"></div></div>
+    <div class="f"><label for="qVal">Validade</label><div class="in"><input id="qVal" type="number" min="1" step="1" value="7"><span>dias</span></div></div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-top:6px">
+      <button class="btn" value="cancel">Cancelar</button><button type="button" class="btn" id="qDown">Baixar PDF</button><button type="button" class="btn wa" id="qWa">Enviar no WhatsApp</button>
+    </div>
+    <p class="h" style="margin:0;font-size:12px;color:var(--muted)">No celular, o PDF vai direto para o WhatsApp. No computador, ele é baixado e o WhatsApp abre com a mensagem pronta: é só anexar o arquivo.</p>
+  </form>
+</dialog>
+
+<div id="quote"></div>
+
+<script>
+(()=>{"use strict";
+const $=id=>document.getElementById(id);
+const DEF={peso:50,th:3,tm:0,qtd:1,pkg:95,desp:5,pimp:2800,vida:5000,watt:95,kwh:0.95,manut:0.3,fixo:200,hmes:200,falha:10,mmin:10,mval:25,emb:2,
+  mmode:'auto',mfixa:100,tpct:0,tfix:0,arred:true,faixas:[[10,150],[25,120],[50,100],[100,80],[200,60],[null,45]]};
+const NUM=['peso','th','tm','qtd','pkg','desp','pimp','vida','watt','kwh','manut','fixo','hmes','falha','mmin','mval','emb','mfixa','tpct','tfix'];
+const STORE='rg_calc3d_v1';
+let S=load();
+const brl=v=>(isFinite(v)?v:0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const pct=v=>(isFinite(v)?v:0).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%';
+function load(){let s=null;try{s=JSON.parse(localStorage.getItem(STORE)||'null');}catch(e){}
+  const o=JSON.parse(JSON.stringify(DEF));if(s&&typeof s==='object')for(const k in o)if(k in s)o[k]=s[k];return o;}
+function save(){try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}}
+function toUI(){for(const k of NUM)$(k).value=S[k];$('arred').checked=!!S.arred;setMode(S.mmode,false);drawFaixas();}
+function fromUI(){for(const k of NUM){const v=parseFloat(String($(k).value).replace(',','.'));S[k]=isFinite(v)&&v>=0?v:0;}S.arred=$('arred').checked;}
+function setMode(m,re=true){S.mmode=m;for(const b of $('mmode').querySelectorAll('button'))b.setAttribute('aria-pressed',b.dataset.v===m);
+  $('mfixaBox').hidden=m!=='auto'?false:true;$('faixasBox').hidden=m!=='auto';$('mhint').hidden=m!=='auto';if(re)calc();}
+function drawFaixas(){const tb=$('faixas').tBodies[0];tb.innerHTML='';let prev=0;
+  S.faixas.forEach((f,i)=>{const tr=document.createElement('tr');tr.dataset.i=i;
+    const ate=f[0]===null?'Acima de '+brl(prev):(i===0?'Custo até ':'De '+brl(prev)+' até ');
+    tr.innerHTML='<td>'+ate+(f[0]===null?'':'<input type="number" min="0" step="1" data-k="0" aria-label="Limite da faixa" value="'+f[0]+'">')+'</td>'+
+      '<td style="text-align:right">margem <input type="number" min="0" step="5" data-k="1" aria-label="Margem da faixa" value="'+f[1]+'"> %</td>';
+    tb.appendChild(tr);if(f[0]!==null)prev=f[0];});}
+$('faixas').addEventListener('change',e=>{const t=e.target;if(!t.dataset.k)return;const i=+t.closest('tr').dataset.i;
+  const v=parseFloat(t.value);S.faixas[i][+t.dataset.k]=isFinite(v)&&v>=0?v:0;
+  for(let j=1;j<S.faixas.length-1;j++)if(S.faixas[j][0]<S.faixas[j-1][0])S.faixas[j][0]=S.faixas[j-1][0];drawFaixas();calc();});
+function faixaDe(c){for(let i=0;i<S.faixas.length;i++){const f=S.faixas[i];if(f[0]===null||c<=f[0])return i;}return S.faixas.length-1;}
+let R=null;
+function calc(){fromUI();
+  const h=S.th+Math.min(S.tm,59)/60, q=Math.max(1,Math.round(S.qtd));
+  const hDep=S.vida>0?S.pimp/S.vida:0, hEn=S.watt/1000*S.kwh, hFix=S.hmes>0?S.fixo/S.hmes:0, hm=hDep+S.manut+hEn+hFix;
+  const fil=S.peso*(1+S.desp/100)/1000*S.pkg, maq=hm*h, falha=(fil+maq)*S.falha/100, mao=S.mmin/60*S.mval, ext=S.emb;
+  const custo=fil+maq+falha+mao+ext;
+  let fi=-1,m=S.mfixa;if(S.mmode==='auto'){fi=faixaDe(custo);m=S.faixas[fi][1];}
+  const base=custo*(1+m/100), t=Math.min(S.tpct,90)/100;
+  let preco=(base+S.tfix)/(1-t);
+  if(S.arred&&preco>0){preco=Math.floor(preco)+0.9;if(preco<(base+S.tfix)/(1-t)-1e-9)preco+=1;}
+  const taxas=preco*t+S.tfix, lucro=preco-taxas-custo;
+  R={h,q,hm,hDep,hEn,hFix,fil,maq,falha,mao,ext,custo,m,fi,preco,taxas,lucro};
+  $('pUn').textContent=brl(preco);$('pTot').textContent=brl(preco*q);$('qLbl').textContent=q;$('lUn').textContent=brl(lucro);
+  $('lUn').style.color=lucro<0?'var(--red)':'var(--ok)';
+  const parts=[['--c-fil',fil],['--c-maq',maq],['--c-falha',falha],['--c-extra',mao+ext],['--c-taxa',taxas],['--c-lucro',Math.max(lucro,0)]];
+  const sum=parts.reduce((a,p)=>a+p[1],0)||1;
+  $('bar').innerHTML=parts.map(p=>'<i style="background:var('+p[0]+');width:'+(p[1]/sum*100).toFixed(2)+'%"></i>').join('');
+  $('hmLabel').textContent='Hora-máquina: '+brl(hm);
+  $('hmBox').innerHTML='Sua <b>hora-máquina</b> custa <b>'+brl(hm)+'</b>: depreciação '+brl(hDep)+' + manutenção '+brl(S.manut)+' + energia '+brl(hEn)+' + custo fixo '+brl(hFix)+'.';
+  const row=(n,d,v,c)=>'<tr'+(c?' class="'+c+'"':'')+'><td>'+n+(d?'<span class="d">'+d+'</span>':'')+'</td><td>'+v+'</td></tr>';
+  const hTxt=Math.floor(h)+'h'+String(Math.round((h%1)*60)).padStart(2,'0');
+  $('brBody').innerHTML=
+    row('Filamento',S.peso.toLocaleString('pt-BR')+' g + '+pct(S.desp)+' de desperdício',brl(fil))+
+    row('Máquina',hTxt+' × '+brl(hm),brl(maq))+
+    row('Reserva para falhas',pct(S.falha)+' sobre filamento + máquina',brl(falha))+
+    row('Seu trabalho',S.mmin+' min a '+brl(S.mval)+'/h',brl(mao))+
+    row('Embalagem e extras','',brl(ext))+
+    row('Custo da peça','',brl(custo),'sum')+
+    row('Margem',S.mmode==='auto'?'faixa '+(fi+1)+' (automática)':'definida por você',pct(m))+
+    row('Taxas do canal',pct(S.tpct)+(S.tfix?' + '+brl(S.tfix):''),brl(taxas))+
+    row('Lucro por unidade',preco>0?pct(lucro/preco*100)+' do preço':'',brl(lucro),'prof');
+  for(const tr of $('faixas').querySelectorAll('tr'))tr.classList.toggle('on',S.mmode==='auto'&&+tr.dataset.i===fi);
+  save();}
+$('form').addEventListener('input',e=>{if(e.target.closest('#faixas'))return;calc();});
+$('arred').addEventListener('change',calc);
+for(const b of $('mmode').querySelectorAll('button'))b.onclick=()=>setMode(b.dataset.v);
+for(const b of $('filChips').querySelectorAll('.chip'))b.onclick=()=>{$('pkg').value=b.dataset.v;calc();};
+for(const b of $('impChips').querySelectorAll('.chip'))b.onclick=()=>{$('pimp').value=b.dataset.p;$('watt').value=b.dataset.w;calc();};
+$('reset').onclick=()=>{S=JSON.parse(JSON.stringify(DEF));toUI();calc();setMsg('Valores de exemplo restaurados.','ok');};
+function setMsg(t,c){const m=$('msg');m.textContent=t;m.className=c||'';}
+$('copy').onclick=async()=>{const t=R.q>1?brl(R.preco)+' por unidade ('+R.q+' un.: '+brl(R.preco*R.q)+')':brl(R.preco);
+  try{await navigator.clipboard.writeText(t);setMsg('Preço copiado: '+t,'ok');}catch(e){setMsg(t,'');}};
+
+const RG_KEY='rg_tool_calculadora',RG_PAGE='/calculadora/';
+const rgEmbedded=window.parent!==window;let rgAuth=null;
+if(rgEmbedded)document.documentElement.classList.add('rg-embed');
+addEventListener('message',e=>{if(e.source===window.parent&&e.data&&e.data.rg==='auth'){rgAuth=!!e.data.logged;$('rgLock').hidden=rgAuth;}});
+try{window.parent.postMessage({rg:'hello'},'*');}catch(e){}
+function rgLogged(){if(!rgEmbedded)return true;if(rgAuth!==null)return rgAuth;try{if(rgEmbedded)return window.parent.document.body.classList.contains('logged-in');}catch(e){}return false;}
+function rgPageUrl(){try{if(rgEmbedded)return window.parent.location.href.split('#')[0];}catch(e){}return location.origin+RG_PAGE;}
+function rgGate(){try{sessionStorage.setItem(RG_KEY,'1');}catch(e){}
+  const url='/minha-conta/?voltar='+encodeURIComponent(rgPageUrl());
+  const m=$('msg');m.className='warn';m.innerHTML='Para gerar o PDF, <a href="'+url+'" target="_top">entre ou crie sua conta grátis</a>. Seus valores ficam salvos.';
+  if(rgEmbedded){try{window.parent.postMessage({rg:'gate',url},'*');}catch(e){}}}
+if(!rgLogged())$('rgLock').hidden=false;
+
+const esc=s=>String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let Q={};try{Q=JSON.parse(localStorage.getItem('rg_calc3d_q')||'{}')||{};}catch(e){}
+$('qEmp').value=Q.emp||'';$('qVal').value=Q.val||7;
+$('pdf').onclick=()=>{if(!R||!(R.preco>0)){setMsg('Preencha os dados da peça primeiro.','warn');return;}
+  if(!rgLogged()){rgGate();return;}
+  if(!$('qCli').value&&$('cNome').value)$('qCli').value=$('cNome').value;
+  if(!$('qDesc').value&&$('cProd').value)$('qDesc').value=$('cProd').value;
+  if(!$('qZap').value&&$('cZap').value)$('qZap').value=$('cZap').value;
+  if(typeof $('qDlg').showModal==='function')$('qDlg').showModal();else makePdf();};
+
+const sp=t=>String(t).replace(/[  ]/g,' ');
+function dadosQ(){const emp=$('qEmp').value.trim()||'Red Geek 3D Studio',cli=$('qCli').value.trim(),desc=$('qDesc').value.trim()||'Peça impressa em 3D',
+  val=Math.max(1,parseInt($('qVal').value)||7),hoje=new Date(),ate=new Date(hoje.getTime()+val*864e5),d=x=>x.toLocaleDateString('pt-BR');
+  try{localStorage.setItem('rg_calc3d_q',JSON.stringify({emp,val}));}catch(e){}
+  const num='RG-'+hoje.toISOString().slice(2,10).replace(/-/g,'')+'-'+String(hoje.getHours()).padStart(2,'0')+String(hoje.getMinutes()).padStart(2,'0');
+  const prazo=$('cPrazo').value?$('cPrazo').value.split('-').reverse().join('/'):'';
+  return {emp,cli,desc,val,hoje:d(hoje),ate:d(ate),num,prazo,obs:$('cObs').value.trim(),q:R.q,un:sp(brl(R.preco)),tot:sp(brl(R.preco*R.q))};}
+function buildPdf(){const J=window.jspdf&&window.jspdf.jsPDF;if(!J)return null;const D=dadosQ();
+  const doc=new J({unit:'mm',format:'a4'}),W=210,L=18,Rr=192;let y;
+  doc.setFillColor(226,0,17);doc.rect(0,0,W,7,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(26);doc.setTextColor(17,18,20);doc.text('ORÇAMENTO',L,26);
+  doc.setFontSize(12);doc.text(D.emp.toUpperCase(),Rr,20,{align:'right'});
+  doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.setTextColor(95,99,107);
+  doc.text('Nº '+D.num,Rr,26,{align:'right'});doc.text('Emitido em '+D.hoje,Rr,31,{align:'right'});
+  doc.setDrawColor(226,0,17);doc.setLineWidth(.8);doc.line(L,36,Rr,36);
+  y=46;if(D.cli){doc.setFontSize(8.5);doc.text('CLIENTE',L,y);doc.setFont('helvetica','bold');doc.setFontSize(13);doc.setTextColor(17,18,20);doc.text(D.cli,L,y+6);doc.setFont('helvetica','normal');y+=16;}
+  doc.setFillColor(246,246,247);doc.rect(L,y,Rr-L,9,'F');doc.setFontSize(8.5);doc.setTextColor(95,99,107);
+  doc.text('DESCRIÇÃO',L+3,y+6);doc.text('QTD.',128,y+6,{align:'right'});doc.text('VALOR UNIT.',158,y+6,{align:'right'});doc.text('TOTAL',Rr-3,y+6,{align:'right'});
+  y+=16;doc.setFontSize(11);doc.setTextColor(17,18,20);const lines=doc.splitTextToSize(D.desc,92);doc.text(lines,L+3,y);
+  doc.text(String(D.q),128,y,{align:'right'});doc.text(D.un,158,y,{align:'right'});doc.text(D.tot,Rr-3,y,{align:'right'});
+  y+=lines.length*5+4;doc.setDrawColor(227,228,231);doc.setLineWidth(.3);doc.line(L,y,Rr,y);
+  y+=12;doc.setFontSize(10);doc.setTextColor(95,99,107);doc.text('TOTAL',Rr-62,y-1,{align:'right'});
+  doc.setFont('helvetica','bold');doc.setFontSize(22);doc.setTextColor(226,0,17);doc.text(D.tot,Rr-3,y,{align:'right'});
+  y+=16;doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(42,44,48);
+  const info=['Orçamento válido até '+D.ate+'.',D.prazo?'Entrega desejada: '+D.prazo+'.':'Prazo de produção a combinar.'];
+  if(D.obs)info.push('Observações: '+D.obs);
+  for(const t of info){const l=doc.splitTextToSize(t,Rr-L);doc.text(l,L,y);y+=l.length*5+2;}
+  doc.setFontSize(8);doc.setTextColor(150,150,150);doc.line(L,282,Rr,282);doc.text('Red Geek 3D Studio - impressão 3D sob medida',L,287);
+  const name='Orcamento-'+D.num+'.pdf';
+  const texto='Olá'+(D.cli?', '+D.cli.split(' ')[0]:'')+'! Segue o orçamento da '+D.emp+': '+D.desc+' ('+D.q+' un.), total de '+D.tot+'. Válido até '+D.ate+'.';
+  return {blob:doc.output('blob'),name,texto};}
+function baixar(P){const u=URL.createObjectURL(P.blob),a=document.createElement('a');a.href=u;a.download=P.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);}
+function waLink(t){let n=digits($('qZap').value);if(n.length===10||n.length===11)n='55'+n;return 'https://wa.me/'+n+'?text='+encodeURIComponent(t);}
+function semJspdf(){$('qDlg').close();makePdf();}
+$('qDown').onclick=()=>{const P=buildPdf();if(!P)return semJspdf();baixar(P);$('qDlg').close();setMsg('PDF baixado: '+P.name,'ok');};
+$('qWa').onclick=async()=>{const P=buildPdf();if(!P)return semJspdf();
+  const file=new File([P.blob],P.name,{type:'application/pdf'});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){
+    try{await navigator.share({files:[file],text:P.texto});$('qDlg').close();setMsg('Orçamento compartilhado.','ok');return;}
+    catch(e){if(e.name==='AbortError')return;}}
+  baixar(P);const link=waLink(P.texto);const w=window.open(link,'_blank');$('qDlg').close();
+  const m=$('msg');m.className='ok';m.innerHTML='PDF baixado. '+(w?'O WhatsApp abriu com a mensagem: anexe o arquivo e envie.':'<a href="'+link+'" target="_blank" rel="noopener">Abrir o WhatsApp</a> e anexar o arquivo.');};
+function makePdf(){const emp=$('qEmp').value.trim(),cli=$('qCli').value.trim(),desc=$('qDesc').value.trim()||'Peça impressa em 3D',val=Math.max(1,parseInt($('qVal').value)||7);
+  try{localStorage.setItem('rg_calc3d_q',JSON.stringify({emp,val}));}catch(e){}
+  const hoje=new Date(),ate=new Date(hoje.getTime()+val*864e5),d=x=>x.toLocaleDateString('pt-BR');
+  $('quote').innerHTML='<div class="qh"><div><h3>Orçamento</h3><div>'+d(hoje)+'</div></div><div class="qn">'+esc(emp||'')+'</div></div>'+
+    (cli?'<p><b>Cliente:</b> '+esc(cli)+'</p>':'')+
+    '<table><thead><tr><th>Descrição</th><th class="n">Qtd.</th><th class="n">Valor unit.</th><th class="n">Total</th></tr></thead><tbody>'+
+    '<tr><td>'+esc(desc)+'</td><td class="n">'+R.q+'</td><td class="n">'+brl(R.preco)+'</td><td class="n">'+brl(R.preco*R.q)+'</td></tr></tbody></table>'+
+    '<div class="tot">Total: '+brl(R.preco*R.q)+'</div>'+
+    '<p class="obs">Orçamento válido até '+d(ate)+'. Prazo de produção a combinar.</p>'+
+    '<div class="ft">Calculado com a calculadora grátis da Red Geek 3D Studio · redgeek.com.br/calculadora</div>';
+  setMsg('Escolha "Salvar como PDF" na janela de impressão.','ok');setTimeout(()=>window.print(),60);}
+
+if(rgEmbedded){let last=0;const send=()=>{const h=Math.ceil(document.body.getBoundingClientRect().height)+2;
+    if(Math.abs(h-last)>1){last=h;try{window.parent.postMessage({rg:'h',h},'*');}catch(e){}}};
+  new ResizeObserver(send).observe(document.body);addEventListener('load',send);setTimeout(send,300);}
+
+const digits=s=>String(s||'').replace(/\D/g,'');
+function tipoUI(){const emp=$('cTipo').value==='Empresa';$('cCnpjBox').hidden=!emp;$('cRespBox').hidden=!emp;
+  $('cNomeLbl').textContent=emp?'Razão social / nome da empresa':'Nome do cliente';}
+$('cTipo').addEventListener('change',tipoUI);
+function b64Blob(b64){const bin=atob(b64),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return new Blob([u],{type:'application/pdf'});}
+function linkFicha(d){if(!d||!d.pdfBase64)return null;const a=document.createElement('a');a.href=URL.createObjectURL(b64Blob(d.pdfBase64));
+  a.download=d.arquivo||'pedido.pdf';a.textContent='Baixar ficha do pedido '+(d.numero||'');return a;}
+function coletar(){
+  if(!R||!(R.preco>0)){setMsg('Preencha os dados da peça primeiro.','warn');return null;}
+  const emp=$('cTipo').value==='Empresa';
+  const cli={tipo:$('cTipo').value,nome:$('cNome').value.trim(),cnpj:digits($('cCnpj').value),responsavel:$('cResp').value.trim(),
+    email:$('cEmail').value.trim().toLowerCase(),whatsapp:digits($('cZap').value)};
+  const ped={canal:$('cCanal').value,produto:$('cProd').value.trim(),prazo:$('cPrazo').value||null,link:$('cLink').value.trim(),obs:$('cObs').value.trim()};
+  const foco=(id,t)=>{setMsg(t,'warn');$('cliStep').scrollIntoView({behavior:'smooth',block:'start'});$(id).focus({preventScroll:true});return null;};
+  if(!cli.nome)return foco('cNome','Informe o nome do cliente.');
+  if(emp&&cli.cnpj.length!==14)return foco('cCnpj','CNPJ precisa ter 14 dígitos.');
+  if(emp&&!cli.responsavel)return foco('cResp','Informe o contato responsável da empresa.');
+  if(!cli.email&&!cli.whatsapp)return foco('cEmail','Informe ao menos e-mail ou WhatsApp.');
+  if(cli.email&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(cli.email))return foco('cEmail','E-mail inválido.');
+  if(!ped.produto)return foco('cProd','Informe o produto.');
+  return {cliente:cli,pedido:ped,parametros:S};
+}
+async function chamar(payload,preview){
+  const r=await fetch('/api/enviar'+(preview?'?preview=1':''),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  let d={};try{d=await r.json();}catch(e){}
+  return {ok:r.ok,status:r.status,d};
+}
+$('ficha').onclick=async()=>{
+  const payload=coletar();if(!payload)return;
+  const btn=$('ficha');btn.disabled=true;const txt=btn.textContent;btn.textContent='Gerando...';
+  try{
+    const {ok,status,d}=await chamar(payload,true);
+    if(!ok)throw new Error(d.erro||('Erro '+status));
+    const a=linkFicha(d);document.body.appendChild(a);a.click();a.remove();
+    setMsg('Ficha do pedido '+d.numero+' baixada.','ok');
+  }catch(e){setMsg('Não foi possível gerar a ficha: '+e.message,'warn');}
+  finally{btn.disabled=false;btn.textContent=txt;}
+};
+
+tipoUI();toUI();calc();
+let back=false;try{back=sessionStorage.getItem(RG_KEY)==='1';sessionStorage.removeItem(RG_KEY);}catch(e){}
+if(back)setTimeout(()=>setMsg(rgLogged()?'Tudo certo, agora é só gerar o PDF.':'','ok'),400);
+window.__rgcalc={get R(){return R},get S(){return S}};
+})();
+</script>
+</body></html>

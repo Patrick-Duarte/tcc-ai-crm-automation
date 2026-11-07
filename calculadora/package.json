@@ -1,0 +1,9 @@
+{
+  "name": "redgeek-calculadora",
+  "private": true,
+  "type": "module",
+  "engines": { "node": "22.x" },
+  "dependencies": {
+    "jspdf": "2.5.1"
+  }
+}
